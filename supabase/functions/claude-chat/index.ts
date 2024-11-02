@@ -10,6 +10,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -42,67 +43,18 @@ serve(async (req) => {
 
     if (!claudeResponse || !claudeResponse.content || claudeResponse.content.length === 0) {
       console.error('Empty response from Claude:', claudeResponse);
-      return new Response(
-        JSON.stringify({
-          error: {
-            message: 'Empty response from Claude',
-            details: 'The AI response was empty. Please try again.'
-          }
-        }),
-        { 
-          status: 400,
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders
-          }
-        }
-      );
+      throw new Error('Empty response from Claude');
     }
 
     const responseContent = claudeResponse.content[0]?.text;
     
     if (!responseContent) {
       console.error('No text content in response:', claudeResponse);
-      return new Response(
-        JSON.stringify({
-          error: {
-            message: 'No text content in response',
-            details: 'The AI response contained no text content.'
-          }
-        }),
-        { 
-          status: 400,
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders
-          }
-        }
-      );
-    }
-
-    const templateSpec = extractJsonFromResponse(responseContent);
-    
-    if (!templateSpec) {
-      console.error('Failed to extract valid JSON from response:', responseContent);
-      return new Response(
-        JSON.stringify({
-          error: {
-            message: 'Invalid template specification',
-            details: 'Could not extract valid JSON from AI response'
-          }
-        }),
-        { 
-          status: 400,
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders
-          }
-        }
-      );
+      throw new Error('No text content in response');
     }
 
     return new Response(
-      JSON.stringify({ content: [{ text: JSON.stringify(templateSpec) }] }),
+      JSON.stringify({ content: [{ text: responseContent }] }),
       { 
         headers: {
           ...corsHeaders,
@@ -112,12 +64,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in claude-chat function:', {
-      message: error.message,
-      stack: error.stack,
-      response: error.response
-    });
-
+    console.error('Error in claude-chat function:', error);
     const errorResponse = handleError(error);
     return new Response(
       JSON.stringify({ error: errorResponse }),
@@ -131,49 +78,3 @@ serve(async (req) => {
     );
   }
 });
-
-function extractJsonFromResponse(response: string): any {
-  try {
-    // First try to parse the entire response as JSON
-    try {
-      return JSON.parse(response);
-    } catch {
-      // If that fails, try to extract JSON from code blocks
-      const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        const jsonContent = jsonMatch[1].trim();
-        const parsed = JSON.parse(jsonContent);
-        if (validateTemplateSpec(parsed)) {
-          return parsed;
-        }
-      }
-
-      // If no valid JSON in code blocks, try to find JSON object in the text
-      const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonObjectMatch) {
-        const parsed = JSON.parse(jsonObjectMatch[0]);
-        if (validateTemplateSpec(parsed)) {
-          return parsed;
-        }
-      }
-    }
-    return null;
-  } catch (error) {
-    console.error('JSON parsing error:', error);
-    return null;
-  }
-}
-
-function validateTemplateSpec(spec: any): boolean {
-  if (!spec || typeof spec !== 'object') return false;
-
-  const requiredFields = ['template_name', 'description', 'blocks', 'databases'];
-  for (const field of requiredFields) {
-    if (!spec[field]) return false;
-  }
-
-  if (!Array.isArray(spec.blocks)) return false;
-  if (!Array.isArray(spec.databases)) return false;
-
-  return true;
-}

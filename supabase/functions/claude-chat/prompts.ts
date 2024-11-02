@@ -32,15 +32,6 @@ export const SYSTEM_PROMPT = `You are a technical Notion template expert. When a
       "title": "Database Title",
       "description": "Database description",
       "is_inline": true,
-      "spacing": {
-        "before": {
-          "type": "divider"
-        },
-        "after": {
-          "type": "paragraph",
-          "rich_text": []
-        }
-      },
       "properties": {
         "Name": { "title": {} },
         "Status": {
@@ -65,11 +56,7 @@ export const SYSTEM_PROMPT = `You are a technical Notion template expert. When a
         }
       ]
     }
-  ],
-  "database_views": ${JSON.stringify(require('./view-configurations.json'))},
-  "spacing_patterns": ${JSON.stringify(require('./spacing-patterns.json'))},
-  "content_structure": ${JSON.stringify(require('./content-structure.json'))},
-  "template_themes": ${JSON.stringify(require('./template-themes.json'))}
+  ]
 }`;
 
 export const REFINEMENT_PROMPTS = {
