@@ -97,17 +97,13 @@ export type Database = {
           id: string
           last_login: string | null
           monthly_template_limit: number | null
-          notion_access_token: string | null
           notion_default_page_id: string | null
-          notion_template_db_id: string | null
-          notion_workspace_id: string | null
           openai_api_key: string | null
           openai_model: string | null
           openai_temperature: number | null
           subscription_tier:
             | Database["public"]["Enums"]["subscription_tier"]
             | null
-          template_db_installed: boolean | null
           template_db_installed_at: string | null
           updated_at: string
         }
@@ -122,17 +118,13 @@ export type Database = {
           id: string
           last_login?: string | null
           monthly_template_limit?: number | null
-          notion_access_token?: string | null
           notion_default_page_id?: string | null
-          notion_template_db_id?: string | null
-          notion_workspace_id?: string | null
           openai_api_key?: string | null
           openai_model?: string | null
           openai_temperature?: number | null
           subscription_tier?:
             | Database["public"]["Enums"]["subscription_tier"]
             | null
-          template_db_installed?: boolean | null
           template_db_installed_at?: string | null
           updated_at?: string
         }
@@ -147,21 +139,53 @@ export type Database = {
           id?: string
           last_login?: string | null
           monthly_template_limit?: number | null
-          notion_access_token?: string | null
           notion_default_page_id?: string | null
-          notion_template_db_id?: string | null
-          notion_workspace_id?: string | null
           openai_api_key?: string | null
           openai_model?: string | null
           openai_temperature?: number | null
           subscription_tier?:
             | Database["public"]["Enums"]["subscription_tier"]
             | null
-          template_db_installed?: boolean | null
           template_db_installed_at?: string | null
           updated_at?: string
         }
         Relationships: []
+      }
+      template_clones: {
+        Row: {
+          clicked_at: string | null
+          id: string
+          template_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          clicked_at?: string | null
+          id?: string
+          template_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          clicked_at?: string | null
+          id?: string
+          template_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_clones_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "template_generations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_clones_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       template_feedback: {
         Row: {
@@ -201,6 +225,7 @@ export type Database = {
       template_generations: {
         Row: {
           ai_settings: Json | null
+          clone_count: number | null
           created_at: string
           description: string | null
           id: string
@@ -209,11 +234,13 @@ export type Database = {
           notion_template_id: string | null
           prompt_text: string | null
           published_at: string | null
+          template_url: string | null
           updated_at: string
           user_id: string | null
         }
         Insert: {
           ai_settings?: Json | null
+          clone_count?: number | null
           created_at?: string
           description?: string | null
           id?: string
@@ -222,11 +249,13 @@ export type Database = {
           notion_template_id?: string | null
           prompt_text?: string | null
           published_at?: string | null
+          template_url?: string | null
           updated_at?: string
           user_id?: string | null
         }
         Update: {
           ai_settings?: Json | null
+          clone_count?: number | null
           created_at?: string
           description?: string | null
           id?: string
@@ -235,6 +264,7 @@ export type Database = {
           notion_template_id?: string | null
           prompt_text?: string | null
           published_at?: string | null
+          template_url?: string | null
           updated_at?: string
           user_id?: string | null
         }

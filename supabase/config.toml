@@ -1,1 +1,7 @@
 project_id = "adkxigojicsxkavxtqms"
+
+[functions.notion-oauth]
+verify_jwt = true
+
+[functions.notion-template]
+verify_jwt = true
