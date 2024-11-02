@@ -1,11 +1,21 @@
 import { cn } from "@/lib/utils";
 
+interface MessageContent {
+  type?: string;
+  text?: string;
+}
+
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
-  content: string;
+  content: string | MessageContent;
 }
 
 export function MessageBubble({ role, content }: MessageBubbleProps) {
+  // Handle both string and object content
+  const messageText = typeof content === 'string' 
+    ? content 
+    : content.text || '';
+
   return (
     <div
       className={cn(
@@ -21,7 +31,7 @@ export function MessageBubble({ role, content }: MessageBubbleProps) {
             : "bg-muted"
         )}
       >
-        <p className="text-sm whitespace-pre-wrap">{content}</p>
+        <p className="text-sm whitespace-pre-wrap">{messageText}</p>
       </div>
     </div>
   );
