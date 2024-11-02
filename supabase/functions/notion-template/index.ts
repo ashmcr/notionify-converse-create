@@ -36,7 +36,7 @@ async function createTemplateInNotion(spec: TemplateSpec) {
         database_id: templateDbId
       },
       properties: {
-        "Name": {
+        "Title": {
           title: [{ text: { content: spec.template_name } }]
         },
         "Description": {
@@ -47,11 +47,19 @@ async function createTemplateInNotion(spec: TemplateSpec) {
             name: spec.category || "Custom"
           }
         },
+        "Status": {
+          select: { 
+            name: "Draft"
+          }
+        },
         "CreatedBy": {
           rich_text: [{ text: { content: spec.user_id } }]
         },
-        "Rating": {
+        "CloneCount": {
           number: 0
+        },
+        "PublicURL": {
+          url: ""  // Will be updated after page creation
         }
       }
     });
@@ -90,9 +98,24 @@ async function createTemplateInNotion(spec: TemplateSpec) {
       }
     }
 
-    // Make template public
+    // Make template public and update status
     console.log('[notion] Publishing template');
     const publicUrl = `https://notion.so/${templatePage.id}`;
+    const publicPage = await notion.pages.update({
+      page_id: templatePage.id,
+      properties: {
+        "Status": {
+          select: { 
+            name: "Published"
+          }
+        },
+        "PublicURL": {
+          url: publicUrl
+        }
+      }
+    });
+
+    console.log('[notion] Template published:', publicPage.id);
 
     return {
       success: true,
