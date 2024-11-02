@@ -16,7 +16,7 @@ export default function Settings() {
   const session = useSession();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [showInitDialog, setShowInitDialog] = useState(false);
 
@@ -30,12 +30,14 @@ export default function Settings() {
   }, [session, navigate]);
 
   const fetchProfile = async () => {
+    if (!session?.user?.id) return;
+    
     try {
       setIsLoading(true);
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', session?.user?.id)
+        .eq('id', session.user.id)
         .single();
 
       if (error) throw error;
@@ -52,6 +54,15 @@ export default function Settings() {
   };
 
   const handleNotionConnect = () => {
+    if (!NOTION_CLIENT_ID) {
+      toast({
+        title: "Configuration Error",
+        description: "Notion Client ID is not configured",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const scopes = [
       'workspace.content',
       'workspace.name',
@@ -65,6 +76,8 @@ export default function Settings() {
   };
 
   const handleNotionCallback = async (code: string) => {
+    if (!session?.user?.id) return;
+    
     setIsLoading(true);
     try {
       const response = await fetch('/api/notion/oauth', {
@@ -85,7 +98,7 @@ export default function Settings() {
           notion_workspace_id: data.workspace_id,
           notion_access_token: data.access_token,
         })
-        .eq('id', session?.user?.id);
+        .eq('id', session.user.id);
 
       if (updateError) throw updateError;
 
