@@ -8,6 +8,7 @@ const RETRY_DELAY = 1000;
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 async function makeRequest(messages: any[], retryCount = 0) {
@@ -28,7 +29,10 @@ async function makeRequest(messages: any[], retryCount = 0) {
 
     if (!response.ok) {
       const error = await response.json();
+      console.error('Claude API error:', error);
+      
       if (response.status === 429 && retryCount < MAX_RETRIES) {
+        console.log(`Retrying request (attempt ${retryCount + 1})`);
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
         return makeRequest(messages, retryCount + 1);
       }
@@ -44,24 +48,41 @@ async function makeRequest(messages: any[], retryCount = 0) {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders,
+    });
   }
 
   try {
     const { messages } = await req.json();
+    console.log('Received request with messages:', messages);
+    
     const response = await makeRequest(messages);
+    console.log('Successfully processed request');
 
     return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json'
+      },
     });
   } catch (error) {
     console.error('Error in claude-chat function:', error);
+    
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ 
+        error: error.message || 'Internal server error',
+        details: error.toString()
+      }),
       { 
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json'
+        },
       }
     );
   }
