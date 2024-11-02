@@ -11,10 +11,7 @@ const corsHeaders = {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
@@ -23,21 +20,6 @@ serve(async (req) => {
     console.log('Processing template chat request:', { messages, refinementType });
 
     const validatedMessages = validateMessages(messages);
-
-    const lastAssistantMessage = validatedMessages
-      .filter(m => m.role === 'assistant')
-      .pop();
-
-    if (lastAssistantMessage) {
-      const validation = validateTemplateSpec(lastAssistantMessage.content);
-      if (!validation.isValid && validation.errorType) {
-        validatedMessages.push({
-          role: 'user',
-          content: ERROR_PROMPTS[validation.errorType as keyof typeof ERROR_PROMPTS]
-            .replace('{error}', validation.error || 'Unknown error')
-        });
-      }
-    }
 
     const finalMessages = refinementType 
       ? [...validatedMessages, {
@@ -80,8 +62,12 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in claude-chat function:', error);
-    
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      status: error.status
+    });
+
     const errorResponse = handleError(error);
     return new Response(
       JSON.stringify({ error: errorResponse }),

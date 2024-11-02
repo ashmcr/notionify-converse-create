@@ -20,37 +20,56 @@ interface TemplateStructure {
   suggestions: string[];
 }
 
-export function processTemplateResponse(response: string): TemplateStructure {
+export function validateTemplateSpec(content: string): { isValid: boolean; error?: string; errorType?: string } {
   try {
-    const parsed = JSON.parse(response);
-    const template = parsed.template;
-
-    if (!template) {
-      throw new Error('Invalid template format');
+    const spec = JSON.parse(content);
+    if (!spec.template) {
+      return { isValid: false, error: 'Missing template object in specification' };
+    }
+    
+    if (!spec.template.properties) {
+      return { isValid: false, error: 'Missing properties configuration' };
     }
 
-    return {
-      properties: Object.entries(template.properties).map(([name, config]: [string, any]) => ({
-        name,
-        type: config.type,
-        options: config.options,
-        format: config.format,
-        formula: config.formula
-      })),
-      views: template.views.map((view: any) => ({
-        name: view.name,
-        type: view.type,
-        filter: view.filter,
-        sort: view.sort,
-        properties: view.properties
-      })),
-      suggestions: [
-        ...(template.automations || []),
-        ...(template.sample_data ? ['Sample data provided'] : [])
-      ]
-    };
+    for (const [key, prop] of Object.entries(spec.template.properties)) {
+      if (!prop.type) {
+        return { 
+          isValid: false, 
+          error: `Invalid property configuration for "${key}": missing type`,
+          errorType: 'invalidProperty'
+        };
+      }
+    }
+
+    if (!spec.template.views || !Array.isArray(spec.template.views)) {
+      return { isValid: false, error: 'Missing or invalid views configuration' };
+    }
+
+    for (const view of spec.template.views) {
+      if (!view.type || !view.name) {
+        return { 
+          isValid: false, 
+          error: 'Invalid view configuration: missing type or name',
+          errorType: 'invalidView'
+        };
+      }
+    }
+
+    const formulas = Object.values(spec.template.properties)
+      .filter((prop: any) => prop.type === 'formula');
+    
+    for (const formula of formulas) {
+      if (!formula.formula?.expression) {
+        return { 
+          isValid: false, 
+          error: 'Invalid formula configuration: missing expression',
+          errorType: 'formulaError'
+        };
+      }
+    }
+
+    return { isValid: true };
   } catch (error) {
-    console.error('Template processing error:', error);
-    throw new Error('Failed to process template structure');
+    return { isValid: false, error: error.message };
   }
 }
