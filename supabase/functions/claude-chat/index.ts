@@ -5,6 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 }
 
 const SYSTEM_PROMPT = `You are a helpful assistant trained to create Notion templates based on user input and specifications. Your responses should be clear, detailed, and follow Notion API specifications where applicable.`
@@ -34,7 +35,6 @@ function validateTemplateSpec(content: string): { isValid: boolean; error?: stri
       return { isValid: false, error: 'Missing template object in specification' };
     }
     
-    // Validate properties
     if (!spec.template.properties) {
       return { isValid: false, error: 'Missing properties configuration' };
     }
@@ -49,7 +49,6 @@ function validateTemplateSpec(content: string): { isValid: boolean; error?: stri
       }
     }
 
-    // Validate views
     if (!spec.template.views || !Array.isArray(spec.template.views)) {
       return { isValid: false, error: 'Missing or invalid views configuration' };
     }
@@ -64,7 +63,6 @@ function validateTemplateSpec(content: string): { isValid: boolean; error?: stri
       }
     }
 
-    // Validate formulas
     const formulas = Object.values(spec.template.properties)
       .filter((prop: any) => prop.type === 'formula');
     
@@ -87,16 +85,19 @@ function validateTemplateSpec(content: string): { isValid: boolean; error?: stri
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      status: 200,
-      headers: corsHeaders 
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...corsHeaders,
+        'Content-Length': '0',
+      }
     });
   }
 
   try {
-    const { messages, refinementType } = await req.json()
+    const { messages, refinementType } = await req.json();
     
-    console.log('Processing template chat request:', { messages, refinementType })
+    console.log('Processing template chat request:', { messages, refinementType });
 
     // Validate the last assistant message if it exists
     const lastAssistantMessage = messages
@@ -106,7 +107,6 @@ serve(async (req) => {
     if (lastAssistantMessage) {
       const validation = validateTemplateSpec(lastAssistantMessage.content);
       if (!validation.isValid && validation.errorType) {
-        // Add error correction prompt
         messages.push({
           role: 'user',
           content: ERROR_PROMPTS[validation.errorType as keyof typeof ERROR_PROMPTS]
@@ -115,7 +115,6 @@ serve(async (req) => {
       }
     }
 
-    // If refinementType is provided, append the appropriate refinement prompt
     const finalMessages = refinementType 
       ? [
           ...messages,
@@ -144,9 +143,9 @@ serve(async (req) => {
           content: `${msg.role === 'user' && !refinementType ? 'Create a Notion template for: ' : ''}${msg.content}`
         }))
       ]
-    })
+    });
 
-    console.log('Claude API response:', JSON.stringify(response))
+    console.log('Claude API response:', JSON.stringify(response));
 
     // Validate template specification
     const validation = validateTemplateSpec(response.content[0].text);
@@ -157,25 +156,26 @@ serve(async (req) => {
     return new Response(
       JSON.stringify(response),
       { 
-        headers: { 
+        status: 200,
+        headers: {
           ...corsHeaders,
           'Content-Type': 'application/json'
-        } 
+        }
       }
-    )
+    );
 
   } catch (error) {
-    console.error('Error in claude-chat function:', error)
+    console.error('Error in claude-chat function:', error);
     
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
         status: 500,
-        headers: { 
+        headers: {
           ...corsHeaders,
           'Content-Type': 'application/json'
         }
       }
-    )
+    );
   }
-})
+});
