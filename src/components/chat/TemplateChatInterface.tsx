@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "@supabase/auth-helpers-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,11 +12,22 @@ interface Message {
   content: string;
 }
 
-const SYSTEM_PROMPT = `You are a Notion template expert. Help users create custom templates by:
-1. Understanding their needs through conversation
-2. Suggesting appropriate database structures
-3. Recommending properties and views
-4. Providing best practices for their use case.
+const SYSTEM_PROMPT = `You are a Notion template expert. Help users create custom templates through a guided conversation:
+
+1. Start by understanding their needs:
+   - Ask about the type of template they need
+   - Inquire about the main purpose
+   - Understand what information they need to track
+
+2. Guide the conversation with follow-up questions about:
+   - Specific properties they need
+   - View preferences (table, board, calendar, etc.)
+   - Any automation or workflow needs
+
+3. Provide suggestions based on common use cases in their category
+   - Share best practices
+   - Recommend proven structures
+   - Suggest helpful automations
 
 When suggesting database properties, use this format:
 Property: [Property Name]: [Property Type]
@@ -30,12 +41,24 @@ For best practices and suggestions, start lines with "Suggestion:" or "Best Prac
 
 Always define clear database properties with specific types and options.`;
 
+const INITIAL_MESSAGE: Message = {
+  role: 'assistant',
+  content: "Hi! I'm here to help you create a Notion template. To get started, could you tell me what kind of template you're looking for? For example, is it for project management, content planning, personal organization, or something else?"
+};
+
 export function TemplateChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [templateStructure, setTemplateStructure] = useState<any>(null);
   const session = useSession();
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Set initial message when component mounts
+    if (messages.length === 0) {
+      setMessages([INITIAL_MESSAGE]);
+    }
+  }, []);
 
   const handleUserMessage = async (userInput: string) => {
     if (!session?.user?.id) {
