@@ -17,18 +17,6 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     }
   }, [session, navigate]);
 
-  // Remove any global keyboard event listeners that might be causing the error
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key && typeof e.key === 'string') {
-        // Handle keyboard events safely here if needed
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   if (!session) {
     return null;
   }
