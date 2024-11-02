@@ -41,7 +41,6 @@ export function useTemplateChat() {
     try {
       const parsedSpec = JSON.parse(templateSpec);
       
-      // Validate required fields
       if (!parsedSpec.template_name || !parsedSpec.description || !parsedSpec.blocks) {
         throw new Error('Invalid template specification: missing required fields');
       }
@@ -70,6 +69,9 @@ export function useTemplateChat() {
         title: "Success",
         description: "Template created successfully",
       });
+      
+      // Reset template structure after successful creation
+      setTemplateStructure(null);
     } catch (error: any) {
       console.error('Template creation error:', error);
       toast({
@@ -120,11 +122,14 @@ export function useTemplateChat() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      try {
-        const structure = processTemplateResponse(data.content[0].text);
-        setTemplateStructure(structure);
-      } catch (parseError) {
-        console.error('Template parsing error:', parseError);
+      // Only process template response if we don't already have a template structure
+      if (!templateStructure) {
+        try {
+          const structure = processTemplateResponse(data.content[0].text);
+          setTemplateStructure(structure);
+        } catch (parseError) {
+          console.error('Template parsing error:', parseError);
+        }
       }
 
     } catch (error: any) {
