@@ -18,21 +18,24 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Notion OAuth endpoint called');
     const { code } = await req.json();
     const authHeader = req.headers.get('Authorization');
 
     if (!code) {
+      console.error('No authorization code provided');
       throw new Error('No authorization code provided');
     }
 
     if (!authHeader) {
+      console.error('No authorization header');
       throw new Error('No authorization header');
     }
 
-    // Initialize Supabase client with service role key for admin access
+    console.log('Initializing Supabase client');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    // Get the user ID from the session
+    console.log('Getting user from session');
     const { data: { user }, error: authError } = await supabase.auth.getUser(
       authHeader.replace('Bearer ', '')
     );
@@ -42,8 +45,7 @@ serve(async (req) => {
       throw new Error('Invalid session');
     }
 
-    // Exchange the authorization code for access token
-    console.log('Exchanging code for access token...');
+    console.log('Exchanging code for access token');
     const response = await fetch('https://api.notion.com/v1/oauth/token', {
       method: 'POST',
       headers: {
@@ -66,7 +68,7 @@ serve(async (req) => {
     const data = await response.json();
     console.log('Successfully received Notion tokens');
 
-    // Update the user's profile with Notion credentials
+    console.log('Updating user profile with Notion credentials');
     const { error: updateError } = await supabase
       .from('profiles')
       .update({

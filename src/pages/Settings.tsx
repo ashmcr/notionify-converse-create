@@ -83,21 +83,14 @@ export default function Settings() {
     
     setIsConnecting(true);
     try {
-      const response = await fetch(`${window.location.origin}/functions/notion-oauth`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code }),
+      console.log('Calling notion-oauth function with code');
+      const { data, error } = await supabase.functions.invoke('notion-oauth', {
+        body: { code },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to connect Notion');
-      }
-
-      const data = await response.json();
+      if (error) throw error;
+      
+      console.log('Notion OAuth response:', data);
       
       toast({
         title: "Success",
