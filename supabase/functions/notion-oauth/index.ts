@@ -37,11 +37,21 @@ const createErrorResponse = (status: number, message: string, details?: any) => 
 
 async function verifyJWT(token: string) {
   try {
+    console.log('Starting JWT verification');
     const jwt = token.replace('Bearer ', '');
+    
+    const jwtSecret = Deno.env.get('JWT_SECRET');
+    if (!jwtSecret) {
+      console.error('JWT_SECRET is not set in environment variables');
+      return null;
+    }
+
+    console.log('Attempting to verify JWT...');
     const { payload } = await jose.jwtVerify(
       jwt,
-      new TextEncoder().encode(Deno.env.get('JWT_SECRET'))
+      new TextEncoder().encode(jwtSecret)
     );
+    console.log('JWT verified successfully:', payload);
     return payload;
   } catch (error) {
     console.error('JWT verification failed:', error);
@@ -83,6 +93,7 @@ serve(async (req) => {
     }
 
     // Verify JWT from state parameter
+    console.log('Verifying state token...');
     const payload = await verifyJWT(state);
     if (!payload) {
       return createErrorResponse(401, 'Invalid or expired state token');
