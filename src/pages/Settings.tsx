@@ -9,7 +9,7 @@ import { TemplateDbInitDialog } from "@/components/notion/TemplateDbInitDialog";
 import { NotionIntegrationCard } from "@/components/settings/NotionIntegrationCard";
 
 const NOTION_CLIENT_ID = import.meta.env.VITE_NOTION_CLIENT_ID;
-const NOTION_REDIRECT_URI = `${window.location.origin}/settings`;
+const NOTION_REDIRECT_URI = `https://adkxigojicsxkavxtqms.supabase.co/functions/v1/notion-oauth`;
 
 export default function Settings() {
   const session = useSession();
@@ -77,82 +77,6 @@ export default function Settings() {
 
     window.location.href = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&redirect_uri=${NOTION_REDIRECT_URI}&response_type=code&owner=user&scope=${scopes}`;
   };
-
-  const handleNotionCallback = async (code: string) => {
-    if (!session?.user?.id) return;
-    
-    setIsConnecting(true);
-    try {
-      console.log('Starting Notion OAuth process with code:', code);
-      
-      // First, get a fresh session token
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      if (!currentSession?.access_token) {
-        throw new Error('No valid session token');
-      }
-
-      console.log('Got fresh session token, invoking edge function...');
-      const { data, error } = await supabase.functions.invoke('notion-oauth', {
-        body: { 
-          code,
-          redirectUri: NOTION_REDIRECT_URI 
-        },
-        headers: {
-          Authorization: `Bearer ${currentSession.access_token}`,
-        },
-      });
-
-      console.log('Edge function response:', { data, error });
-
-      if (error) {
-        console.error('Edge function error:', error);
-        throw error;
-      }
-      
-      toast({
-        title: "Success",
-        description: "Notion workspace connected successfully!",
-      });
-
-      await fetchProfile();
-      setShowInitDialog(true);
-    } catch (error: any) {
-      console.error('Notion connection error:', error);
-      toast({
-        title: "Error connecting Notion",
-        description: error.message || 'Failed to connect to Notion',
-        variant: "destructive",
-      });
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    const code = url.searchParams.get('code');
-    const error = url.searchParams.get('error');
-    const error_description = url.searchParams.get('error_description');
-
-    // Clean up URL parameters
-    if (code || error) {
-      window.history.replaceState({}, document.title, "/settings");
-    }
-
-    if (error) {
-      toast({
-        title: "Notion Connection Error",
-        description: error_description || "Failed to connect Notion workspace",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (code) {
-      console.log('Detected Notion callback code, initiating OAuth process...');
-      handleNotionCallback(code);
-    }
-  }, []);
 
   return (
     <MainLayout>
