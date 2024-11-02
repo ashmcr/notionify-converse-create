@@ -16,100 +16,101 @@ interface TemplateSpec {
   category?: string;
 }
 
-async function createTemplateInNotion(spec: TemplateSpec) {
-  console.log('[notion] Creating template:', spec.template_name);
+async function createTemplateContainer(notion: Client, spec: TemplateSpec) {
+  console.log('[notion] Creating template container:', spec.template_name);
   
-  const notion = new Client({ 
-    auth: Deno.env.get('NOTION_ADMIN_TOKEN')
-  });
-
   const templateDbId = Deno.env.get('NOTION_TEMPLATE_DB_ID');
   if (!templateDbId) {
     throw new Error('Template database ID not configured');
   }
 
-  try {
-    // First, create the template entry in the templates database
-    console.log('[notion] Creating template entry in database:', templateDbId);
-    const templatePage = await notion.pages.create({
-      parent: {
-        database_id: templateDbId
-      },
-      properties: {
-        "Title": {
-          title: [{ 
-            type: "text",
-            text: { content: spec.template_name } 
-          }]
-        },
-        "Description": {
-          rich_text: [{ 
-            type: "text",
-            text: { content: spec.description } 
-          }]
-        },
-        "Category": {
-          select: { 
-            name: spec.category || "Custom"
-          }
-        },
-        "CreatedBy": {
-          rich_text: [{ 
-            type: "text",
-            text: { content: spec.user_id } 
-          }]
-        },
-        "CloneCount": {
-          number: 0
-        }
-      }
-    });
-
-    console.log('[notion] Created template page:', templatePage.id);
-
-    // Add template content blocks
-    if (spec.blocks && spec.blocks.length > 0) {
-      console.log('[notion] Adding template blocks');
-      await notion.blocks.children.append({
-        block_id: templatePage.id,
-        children: spec.blocks
-      });
-    }
-
-    // If template includes a database, create it
-    if (spec.database_properties) {
-      console.log('[notion] Creating template database');
-      const database = await notion.databases.create({
-        parent: { page_id: templatePage.id },
+  // Create container page in templates database
+  const containerPage = await notion.pages.create({
+    parent: { database_id: templateDbId },
+    properties: {
+      "Title": {
         title: [{ 
           type: "text",
-          text: { content: `${spec.template_name} Database` } 
-        }],
-        properties: spec.database_properties
-      });
-
-      console.log('[notion] Created database:', database.id);
-
-      // Add sample data if provided
-      if (spec.sample_data && spec.sample_data.length > 0) {
-        console.log('[notion] Adding sample data');
-        for (const item of spec.sample_data) {
-          await notion.pages.create({
-            parent: { database_id: database.id },
-            properties: item
-          });
+          text: { content: spec.template_name } 
+        }]
+      },
+      "Description": {
+        rich_text: [{ 
+          type: "text",
+          text: { content: spec.description } 
+        }]
+      },
+      "Category": {
+        select: { 
+          name: spec.category || "Custom"
         }
+      },
+      "CreatedBy": {
+        rich_text: [{ 
+          type: "text",
+          text: { content: spec.user_id } 
+        }]
+      },
+      "CloneCount": {
+        number: 0
       }
     }
+  });
 
-    return {
-      success: true,
-      templateId: templatePage.id
-    };
-  } catch (error) {
-    console.error('[notion] Template creation failed:', error);
-    throw error;
+  console.log('[notion] Created container page:', containerPage.id);
+
+  // Create the actual template page within the container
+  const templatePage = await notion.pages.create({
+    parent: { page_id: containerPage.id },
+    properties: {
+      title: [{ 
+        type: "text",
+        text: { content: `${spec.template_name} Template Content` } 
+      }]
+    }
+  });
+
+  console.log('[notion] Created template content page:', templatePage.id);
+
+  // Add template content blocks
+  if (spec.blocks && spec.blocks.length > 0) {
+    console.log('[notion] Adding template blocks');
+    await notion.blocks.children.append({
+      block_id: templatePage.id,
+      children: spec.blocks
+    });
   }
+
+  // If template includes a database, create it
+  if (spec.database_properties) {
+    console.log('[notion] Creating template database');
+    const database = await notion.databases.create({
+      parent: { page_id: templatePage.id },
+      title: [{ 
+        type: "text",
+        text: { content: `${spec.template_name} Database` } 
+      }],
+      properties: spec.database_properties
+    });
+
+    console.log('[notion] Created database:', database.id);
+
+    // Add sample data if provided
+    if (spec.sample_data && spec.sample_data.length > 0) {
+      console.log('[notion] Adding sample data');
+      for (const item of spec.sample_data) {
+        await notion.pages.create({
+          parent: { database_id: database.id },
+          properties: item
+        });
+      }
+    }
+  }
+
+  return {
+    containerId: containerPage.id,
+    templateId: templatePage.id
+  };
 }
 
 serve(async (req) => {
@@ -138,11 +139,20 @@ serve(async (req) => {
       );
     }
 
-    // Create template in Notion
-    const result = await createTemplateInNotion(templateSpec);
+    // Initialize Notion client
+    const notion = new Client({ 
+      auth: Deno.env.get('NOTION_ADMIN_TOKEN')
+    });
+
+    // Create template with nested structure
+    const result = await createTemplateContainer(notion, templateSpec);
 
     return new Response(
-      JSON.stringify(result),
+      JSON.stringify({
+        success: true,
+        containerId: result.containerId,
+        templateId: result.templateId
+      }),
       { 
         headers: {
           ...corsHeaders,
