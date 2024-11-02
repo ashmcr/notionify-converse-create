@@ -33,14 +33,19 @@ export default function Settings() {
     
     try {
       setIsLoading(true);
-      const { data: profile, error } = await supabase
+      const { data: profiles, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
-        .single();
+        .limit(1);
 
       if (error) throw error;
-      setProfile(profile);
+      
+      if (!profiles || profiles.length === 0) {
+        throw new Error('Profile not found');
+      }
+
+      setProfile(profiles[0]);
     } catch (error: any) {
       toast({
         title: "Error fetching profile",
