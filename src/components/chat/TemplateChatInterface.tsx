@@ -36,25 +36,23 @@ export function TemplateChatInterface() {
 
     try {
       setIsLoading(true);
-      const newMessages = [
-        ...messages,
-        { role: 'user', content: userInput }
-      ];
-      setMessages(newMessages);
+      const newMessage: Message = { role: 'user', content: userInput };
+      setMessages(prevMessages => [...prevMessages, newMessage]);
 
       const response = await supabase.functions.invoke('claude-chat', {
         body: {
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
-            ...newMessages
+            ...messages,
+            newMessage
           ]
         }
       });
 
       if (response.error) throw response.error;
 
-      setMessages(messages => [
-        ...messages,
+      setMessages(prevMessages => [
+        ...prevMessages,
         { role: 'assistant', content: response.data.content }
       ]);
 

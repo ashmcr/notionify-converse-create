@@ -10,35 +10,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function streamResponse(response: Response) {
-  const reader = response.body?.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader!.read();
-    if (done) break;
-    
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (line.trim() === '') continue;
-      if (line.startsWith('data: ')) {
-        const data = line.slice(5);
-        if (data === '[DONE]') return;
-        try {
-          const parsed = JSON.parse(data);
-          return parsed;
-        } catch (e) {
-          console.error('Error parsing SSE message:', e);
-        }
-      }
-    }
-  }
-}
-
 async function makeRequest(messages: any[], retryCount = 0) {
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -51,7 +22,6 @@ async function makeRequest(messages: any[], retryCount = 0) {
       body: JSON.stringify({
         model: 'claude-3-sonnet-20240229',
         messages,
-        stream: true,
         max_tokens: 4096,
       }),
     });
@@ -65,7 +35,8 @@ async function makeRequest(messages: any[], retryCount = 0) {
       throw new Error(error.message || 'Failed to get response from Claude');
     }
 
-    return streamResponse(response);
+    const data = await response.json();
+    return data;
   } catch (error) {
     console.error('Error in Claude API call:', error);
     throw error;
@@ -85,6 +56,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
+    console.error('Error in claude-chat function:', error);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
       { 
