@@ -70,7 +70,9 @@ export function processTemplateResponse(response: string): TemplateStructure {
 
 export function validateTemplateSpec(spec: any): { isValid: boolean; error?: string; errorType?: string } {
   try {
-    if (!spec || typeof spec !== 'object') return false;
+    if (!spec || typeof spec !== 'object') {
+      return { isValid: false, error: 'Invalid template specification format' };
+    }
 
     if (!spec.template_name || !spec.description) {
       return { isValid: false, error: 'Missing template name or description' };
@@ -96,6 +98,9 @@ export function validateTemplateSpec(spec: any): { isValid: boolean; error?: str
 
     return { isValid: true };
   } catch (error) {
-    return { isValid: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return { 
+      isValid: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
   }
 }
