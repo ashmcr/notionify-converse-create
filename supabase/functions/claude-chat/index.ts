@@ -18,15 +18,68 @@ const REFINEMENT_PROMPTS = {
   optimization: `Evaluate the current template specification and suggest optimizations for performance and usability. Include specific technical improvements.`
 };
 
-function validateTemplateSpec(content: string): boolean {
+const ERROR_PROMPTS = {
+  invalidProperty: `The property configuration is invalid. Please provide a corrected specification that matches the Notion API requirements. Current error: {error}`,
+  
+  invalidView: `The view configuration is incorrect. Please provide a valid view specification according to the Notion API documentation. Current error: {error}`,
+  
+  formulaError: `The formula syntax is invalid. Please provide a corrected formula that follows Notion's formula syntax. Current error: {error}`
+};
+
+function validateTemplateSpec(content: string): { isValid: boolean; error?: string } {
   try {
     const spec = JSON.parse(content);
-    if (!spec.template) return false;
+    if (!spec.template) {
+      return { isValid: false, error: 'Missing template object in specification' };
+    }
     
-    const requiredFields = ['properties', 'views', 'automations'];
-    return requiredFields.every(field => spec.template[field] !== undefined);
-  } catch {
-    return false;
+    // Validate properties
+    if (!spec.template.properties) {
+      return { isValid: false, error: 'Missing properties configuration' };
+    }
+
+    for (const [key, prop] of Object.entries(spec.template.properties)) {
+      if (!prop.type) {
+        return { 
+          isValid: false, 
+          error: `Invalid property configuration for "${key}": missing type`,
+          errorType: 'invalidProperty'
+        };
+      }
+    }
+
+    // Validate views
+    if (!spec.template.views || !Array.isArray(spec.template.views)) {
+      return { isValid: false, error: 'Missing or invalid views configuration' };
+    }
+
+    for (const view of spec.template.views) {
+      if (!view.type || !view.name) {
+        return { 
+          isValid: false, 
+          error: 'Invalid view configuration: missing type or name',
+          errorType: 'invalidView'
+        };
+      }
+    }
+
+    // Validate formulas
+    const formulas = Object.values(spec.template.properties)
+      .filter((prop: any) => prop.type === 'formula');
+    
+    for (const formula of formulas) {
+      if (!formula.formula?.expression) {
+        return { 
+          isValid: false, 
+          error: 'Invalid formula configuration: missing expression',
+          errorType: 'formulaError'
+        };
+      }
+    }
+
+    return { isValid: true };
+  } catch (error) {
+    return { isValid: false, error: error.message };
   }
 }
 
@@ -43,6 +96,23 @@ serve(async (req) => {
     const { messages, refinementType } = await req.json()
     
     console.log('Processing template chat request:', { messages, refinementType })
+
+    // Validate the last assistant message if it exists
+    const lastAssistantMessage = messages
+      .filter(m => m.role === 'assistant')
+      .pop();
+
+    if (lastAssistantMessage) {
+      const validation = validateTemplateSpec(lastAssistantMessage.content);
+      if (!validation.isValid && validation.errorType) {
+        // Add error correction prompt
+        messages.push({
+          role: 'user',
+          content: ERROR_PROMPTS[validation.errorType as keyof typeof ERROR_PROMPTS]
+            .replace('{error}', validation.error || 'Unknown error')
+        });
+      }
+    }
 
     // If refinementType is provided, append the appropriate refinement prompt
     const finalMessages = refinementType 
@@ -74,8 +144,9 @@ serve(async (req) => {
     console.log('Claude API response:', JSON.stringify(response))
 
     // Validate template specification
-    if (!validateTemplateSpec(response.content[0].text)) {
-      throw new Error('Invalid template specification format');
+    const validation = validateTemplateSpec(response.content[0].text);
+    if (!validation.isValid) {
+      throw new Error(validation.error || 'Invalid template specification format');
     }
 
     return new Response(
