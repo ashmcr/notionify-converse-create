@@ -1,12 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 import { verifyJWT } from "./auth.ts";
-import { exchangeCodeForToken } from "./notion.ts";
+import { exchangeCodeForToken, findTemplateDatabase } from "./notion.ts";
+import { updateUserProfile } from "./database.ts";
 import { corsHeaders, createErrorResponse } from "./utils.ts";
 
 const FRONTEND_URL = 'https://notionify-converse-create.vercel.app';
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 serve(async (req) => {
   console.log('[server] Received request:', {
@@ -47,59 +45,68 @@ serve(async (req) => {
       return createErrorResponse(401, 'Invalid or expired state token');
     }
 
+    // Extract user ID from payload
+    const userId = payload.sub;
+    if (!userId) {
+      return createErrorResponse(401, 'No user ID in token');
+    }
+
     // Exchange code for Notion access token
+    console.log('[server] Exchanging code for access token...');
     const notionData = await exchangeCodeForToken(code);
     if (!notionData) {
       return createErrorResponse(500, 'Failed to exchange code for access token');
     }
 
-    // Initialize Supabase client
-    console.log('[server] Updating user profile');
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Find template database and validate permissions
+    console.log('[server] Looking for template database...');
+    let templateInfo = null;
+    try {
+      templateInfo = await findTemplateDatabase(notionData.access_token);
+    } catch (error) {
+      console.log('[server] Template database not found or inaccessible:', error);
+      // Continue without template info - user might not have created it yet
+    }
 
-    // Get user from state token
-    const { data: { user }, error: authError } = await supabase.auth.getUser(state);
+    // Update user profile with Notion credentials and template info
+    console.log('[server] Updating user profile...');
+    await updateUserProfile(userId, {
+      accessToken: notionData.access_token,
+      workspaceId: notionData.workspace_id,
+      templateDbId: templateInfo?.databaseId,
+      defaultPageId: templateInfo?.parentPageId,
+    });
+
+    console.log('[server] OAuth flow completed successfully');
+
+    // Redirect back to the frontend
+    const redirectUrl = new URL('/settings', FRONTEND_URL);
+    redirectUrl.searchParams.set('success', 'true');
     
-    if (authError || !user) {
-      console.error('[server] Auth error:', authError);
-      return createErrorResponse(401, 'Invalid session');
+    if (!templateInfo) {
+      redirectUrl.searchParams.set('warning', 'template-not-found');
     }
 
-    console.log('[server] User authenticated:', user.id);
-
-    // Update the user's profile with Notion credentials
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({
-        notion_workspace_id: notionData.workspace_id,
-        notion_access_token: notionData.access_token,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', user.id);
-
-    if (updateError) {
-      console.error('[server] Profile update error:', updateError);
-      return createErrorResponse(500, 'Failed to update user profile');
-    }
-
-    console.log('[server] Profile updated successfully');
-
-    // Redirect back to the frontend with success parameter
     return new Response(null, {
       status: 302,
       headers: {
         ...corsHeaders,
-        'Location': `${FRONTEND_URL}/settings?success=true`,
+        'Location': redirectUrl.toString(),
       },
     });
 
   } catch (error) {
     console.error('[server] Error in notion-oauth function:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
+    const redirectUrl = new URL('/settings', FRONTEND_URL);
+    redirectUrl.searchParams.set('error', encodeURIComponent(errorMessage));
+    
     return new Response(null, {
       status: 302,
       headers: {
         ...corsHeaders,
-        'Location': `${FRONTEND_URL}/settings?error=${encodeURIComponent(error.message)}`,
+        'Location': redirectUrl.toString(),
       },
     });
   }
