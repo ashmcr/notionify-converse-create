@@ -27,6 +27,21 @@ export default function Settings() {
     }
 
     fetchProfile();
+
+    // Check for Notion connection status from URL params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('notion_connected') === 'true') {
+      toast({
+        title: "Success",
+        description: "Successfully connected to Notion!",
+      });
+    } else if (params.get('error')) {
+      toast({
+        title: "Error",
+        description: params.get('error'),
+        variant: "destructive",
+      });
+    }
   }, [session]);
 
   const fetchProfile = async () => {
@@ -84,10 +99,7 @@ export default function Settings() {
       'page.write',
     ].join(',');
 
-    // Store the access token in localStorage before redirecting
-    localStorage.setItem('supabase_auth_token', session.access_token);
-
-    window.location.href = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&redirect_uri=${NOTION_REDIRECT_URI}&response_type=code&owner=user&scope=${scopes}`;
+    window.location.href = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&redirect_uri=${NOTION_REDIRECT_URI}&response_type=code&owner=user&scope=${scopes}&state=${session.access_token}`;
   };
 
   return (

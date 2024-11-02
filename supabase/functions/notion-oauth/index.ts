@@ -25,16 +25,15 @@ serve(async (req) => {
   }
 
   try {
-    // Get the authorization token from the URL search params
     const url = new URL(req.url);
     const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state'); // This is our access token
     const error = url.searchParams.get('error');
-    const authHeader = req.headers.get('Authorization');
 
     console.log('Request details:', { 
       code: code ? 'present' : 'missing',
+      state: state ? 'present' : 'missing',
       error: error || 'none',
-      authHeader: authHeader ? 'present' : 'missing'
     });
 
     if (error) {
@@ -45,13 +44,8 @@ serve(async (req) => {
       throw new Error('No authorization code provided');
     }
 
-    if (!authHeader) {
-      // Try to get the token from the URL parameters
-      const token = url.searchParams.get('state');
-      if (!token) {
-        throw new Error('No authorization token found');
-      }
-      req.headers.set('Authorization', `Bearer ${token}`);
+    if (!state) {
+      throw new Error('No authorization token provided');
     }
 
     // Initialize Supabase client
@@ -60,9 +54,7 @@ serve(async (req) => {
     
     // Get user from session token
     console.log('Getting user from session token');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader?.replace('Bearer ', '') || url.searchParams.get('state')
-    );
+    const { data: { user }, error: authError } = await supabase.auth.getUser(state);
     
     if (authError || !user) {
       console.error('Auth error:', authError);
@@ -117,7 +109,7 @@ serve(async (req) => {
     console.log('Profile updated successfully');
 
     // Redirect back to the settings page with success parameters
-    const redirectUrl = new URL(`${req.headers.get('origin')}/settings`);
+    const redirectUrl = new URL(`${url.origin}/settings`);
     redirectUrl.searchParams.set('notion_connected', 'true');
     
     return new Response(null, {
@@ -130,7 +122,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in notion-oauth function:', error);
-    const redirectUrl = new URL(`${req.headers.get('origin')}/settings`);
+    const redirectUrl = new URL(`${req.headers.get('origin') || ''}/settings`);
     redirectUrl.searchParams.set('error', error.message);
     
     return new Response(null, {
