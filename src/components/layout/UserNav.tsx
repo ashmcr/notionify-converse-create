@@ -11,16 +11,28 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useToast } from "@/components/ui/use-toast";
 
 export function UserNav() {
   const session = useSession();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const user = session?.user;
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate("/login");
+    try {
+      await supabase.auth.signOut();
+      navigate("/login");
+    } catch (error) {
+      toast({
+        title: "Error signing out",
+        description: "Please try again later",
+        variant: "destructive",
+      });
+    }
   };
+
+  if (!user) return null;
 
   return (
     <DropdownMenu>
