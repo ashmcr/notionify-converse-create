@@ -93,10 +93,25 @@ export const findOrCreateTemplateDatabase = async (accessToken: string) => {
       };
     }
 
-    // Create new database in workspace root
-    console.log('[notion] Creating new template database in workspace root');
-    const newDb = await notion.databases.create({
+    // First, create a parent page to host our database
+    console.log('[notion] Creating parent page for database');
+    const parentPage = await notion.pages.create({
       parent: { type: "workspace", workspace: true },
+      properties: {
+        title: [{ 
+          type: "text",
+          text: { content: "NotionGPT Templates" }
+        }]
+      }
+    });
+
+    // Create new database under the parent page
+    console.log('[notion] Creating new template database under parent page');
+    const newDb = await notion.databases.create({
+      parent: { 
+        type: "page_id",
+        page_id: parentPage.id
+      },
       title: [{ type: "text", text: { content: "NotionGPT Template Library" } }],
       properties: {
         Name: { title: {} },
@@ -141,7 +156,7 @@ export const findOrCreateTemplateDatabase = async (accessToken: string) => {
     
     return {
       databaseId: newDb.id,
-      parentPageId: newDb.parent.type === 'page_id' ? newDb.parent.page_id : null,
+      parentPageId: parentPage.id,
     };
   } catch (error) {
     console.error('[notion] Error in template database setup:', {
