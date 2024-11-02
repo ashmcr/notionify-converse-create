@@ -6,40 +6,74 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const SYSTEM_PROMPT = `You are a helpful AI assistant specialized in creating Notion templates. Your goal is to understand the user's needs and provide detailed, structured template specifications.
+const SYSTEM_PROMPT = `You are a technical Notion template architect. Your role is to provide specific, technical instructions for creating Notion databases with detailed property configurations and view setups. 
 
-When designing templates:
-1. Focus on practical, real-world use cases
-2. Include relevant properties, views, and suggestions
-3. Keep the structure clean and intuitive
-4. Provide clear explanations for your choices
+When analyzing user requests, always respond with a structured template specification in this format:
 
-Format your responses as natural conversation, but include specific template details using these markers:
+1. Database Properties (provide exact technical specifications):
+{
+  "properties": {
+    "Name": { "type": "title" },
+    // List all properties with exact Notion API specifications
+    // Include property configurations, options, and validations
+  }
+}
 
-Property: [Name]: [Type] - For database properties
-View: [Name]: [Type] - For different view configurations
-Suggestion: [Text] - For best practices and tips
+2. View Configurations (specify all views with settings):
+{
+  "views": [
+    {
+      "type": "table|board|calendar|etc",
+      "name": "View Name",
+      "filter": {}, // Include filter specifications
+      "sort": {},   // Include sort specifications
+      // Include all view-specific settings
+    }
+  ]
+}
 
-Example:
-"I suggest creating a Project Tracker with these components:
+3. Automation Suggestions:
+- List specific Notion formulas
+- Provide relation configurations
+- Suggest rollup calculations
 
-Property: Project Name: text
-Property: Status: select
-Property: Due Date: date
-Property: Assigned To: person
-Property: Priority: select
+4. Template Structure:
+- Provide exact property types and options
+- Include sample data format
+- Specify relation and rollup configurations
 
-View: Kanban Board: board
-View: Timeline: timeline
-View: Table View: table
+Example response format:
+{
+  "template": {
+    "name": "Template Name",
+    "properties": {
+      // Exact Notion API property configurations
+    },
+    "views": [
+      // Exact view configurations
+    ],
+    "automations": [
+      // Formula and relation specifications
+    ],
+    "sample_data": [
+      // Example entries in correct format
+    ]
+  }
+}`
 
-Suggestion: Use color coding in the Status property to quickly identify project progress
-Suggestion: Add custom filters in the Kanban view to focus on high-priority items"
-
-Always maintain this format for consistency.`
+function validateTemplateSpec(content: string): boolean {
+  try {
+    const spec = JSON.parse(content);
+    if (!spec.template) return false;
+    
+    const requiredFields = ['properties', 'views', 'automations'];
+    return requiredFields.every(field => spec.template[field] !== undefined);
+  } catch {
+    return false;
+  }
+}
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -51,7 +85,7 @@ serve(async (req) => {
 
     const { messages } = await req.json()
 
-    console.log('Processing chat request with messages:', messages)
+    console.log('Processing template chat request:', messages)
 
     const response = await anthropic.messages.create({
       model: 'claude-3-sonnet-20240229',
@@ -62,11 +96,19 @@ serve(async (req) => {
           role: 'system',
           content: SYSTEM_PROMPT
         },
-        ...messages
+        ...messages.map(msg => ({
+          role: msg.role,
+          content: `${msg.role === 'user' ? 'Create a Notion template for: ' : ''}${msg.content}`
+        }))
       ]
     })
 
     console.log('Claude API response:', JSON.stringify(response))
+
+    // Validate template specification
+    if (!validateTemplateSpec(response.content[0].text)) {
+      throw new Error('Invalid template specification format');
+    }
 
     return new Response(
       JSON.stringify(response),
