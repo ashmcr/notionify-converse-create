@@ -4,9 +4,10 @@ import { Anthropic } from 'https://esm.sh/@anthropic-ai/sdk@0.4.3'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const SYSTEM_PROMPT = `// ... keep existing code`
+const SYSTEM_PROMPT = `You are a helpful assistant trained to create Notion templates based on user input and specifications. Your responses should be clear, detailed, and follow Notion API specifications where applicable.`
 
 const REFINEMENT_PROMPTS = {
   properties: `Based on the template specification provided, suggest additional properties that would enhance the functionality. Include exact Notion API configurations for each suggestion.`,
@@ -84,15 +85,15 @@ function validateTemplateSpec(content: string): { isValid: boolean; error?: stri
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { 
+      status: 200,
+      headers: corsHeaders 
+    });
   }
 
   try {
-    const anthropic = new Anthropic({
-      apiKey: Deno.env.get('ANTHROPIC_API_KEY'),
-    });
-
     const { messages, refinementType } = await req.json()
     
     console.log('Processing template chat request:', { messages, refinementType })
@@ -125,6 +126,10 @@ serve(async (req) => {
         ]
       : messages;
 
+    const anthropic = new Anthropic({
+      apiKey: Deno.env.get('ANTHROPIC_API_KEY'),
+    });
+
     const response = await anthropic.messages.create({
       model: 'claude-3-sonnet-20240229',
       max_tokens: 4096,
@@ -153,8 +158,8 @@ serve(async (req) => {
       JSON.stringify(response),
       { 
         headers: { 
-          'Content-Type': 'application/json',
-          ...corsHeaders
+          ...corsHeaders,
+          'Content-Type': 'application/json'
         } 
       }
     )
@@ -167,8 +172,8 @@ serve(async (req) => {
       { 
         status: 500,
         headers: { 
-          'Content-Type': 'application/json',
-          ...corsHeaders
+          ...corsHeaders,
+          'Content-Type': 'application/json'
         }
       }
     )
