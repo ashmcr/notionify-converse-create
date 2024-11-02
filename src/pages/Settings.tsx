@@ -1,13 +1,12 @@
 import { useSession } from "@supabase/auth-helpers-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TemplateDbInitDialog } from "@/components/notion/TemplateDbInitDialog";
+import { NotionIntegrationCard } from "@/components/settings/NotionIntegrationCard";
 
 const NOTION_CLIENT_ID = import.meta.env.VITE_NOTION_CLIENT_ID;
 const NOTION_REDIRECT_URI = `${window.location.origin}/settings`;
@@ -70,9 +69,7 @@ export default function Settings() {
       'page.write',
     ].join(',');
 
-    const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&redirect_uri=${NOTION_REDIRECT_URI}&response_type=code&owner=user&scope=${scopes}`;
-    
-    window.location.href = authUrl;
+    window.location.href = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&redirect_uri=${NOTION_REDIRECT_URI}&response_type=code&owner=user&scope=${scopes}`;
   };
 
   const handleNotionCallback = async (code: string) => {
@@ -136,6 +133,7 @@ export default function Settings() {
 
     if (code) {
       handleNotionCallback(code);
+      // Use replace state to avoid issues with browser history
       window.history.replaceState({}, document.title, "/settings");
     }
   }, []);
@@ -152,44 +150,11 @@ export default function Settings() {
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Notion Integration</CardTitle>
-              <CardDescription>
-                Connect your Notion workspace to use templates and save content
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {profile?.notion_workspace_id ? (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Connected to Notion workspace
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={handleNotionConnect}
-                    disabled={isLoading}
-                  >
-                    Reconnect Workspace
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  onClick={handleNotionConnect}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Connecting...
-                    </>
-                  ) : (
-                    'Connect Notion Workspace'
-                  )}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+          <NotionIntegrationCard 
+            isLoading={isLoading}
+            profile={profile}
+            onConnect={handleNotionConnect}
+          />
         )}
 
         <TemplateDbInitDialog 
