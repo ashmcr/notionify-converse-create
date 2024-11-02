@@ -36,7 +36,7 @@ const AuthForm = () => {
           }}
           providers={[]}
           redirectTo={window.location.origin}
-          onError={(error) => {
+          onAuthError={(error) => {
             toast({
               title: "Authentication Error",
               description: error.message,
