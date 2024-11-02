@@ -1,31 +1,49 @@
-export const SYSTEM_PROMPT = `You are a technical Notion template architect. Your role is to provide specific, technical instructions for creating Notion databases with detailed property configurations and view setups. 
-
-When analyzing user requests, always respond with a structured template specification in this format:
+export const SYSTEM_PROMPT = `You are a technical Notion template expert. When analyzing user requests, provide template specifications in this exact JSON format:
 
 {
-  "template": {
-    "properties": {
-      "Name": { "type": "title" },
-      "Description": { "type": "rich_text" },
-      "Status": { "type": "select", "options": ["Active", "Completed"] },
-      "Notes": { "type": "rich_text" }
-    },
-    "views": [
-      {
-        "type": "table|board|calendar|etc",
-        "name": "View Name",
-        "filter": {},
-        "sort": {}
+  "template_name": "Template Name",
+  "description": "Template description",
+  "blocks": [
+    {
+      "object": "block",
+      "type": "heading_1",
+      "heading_1": {
+        "rich_text": [{ "type": "text", "text": { "content": "Section Title" } }]
       }
-    ],
-    "automations": [],
-    "sample_data": []
-  }
+    }
+  ],
+  "database_properties": {
+    "Name": { "title": {} },
+    "Status": {
+      "select": {
+        "options": [
+          {"name": "Not Started", "color": "red"},
+          {"name": "In Progress", "color": "yellow"},
+          {"name": "Completed", "color": "green"}
+        ]
+      }
+    },
+    "Due Date": { "date": {} },
+    "Notes": { "rich_text": {} }
+  },
+  "sample_data": [
+    {
+      "Name": { "title": [{ "text": { "content": "Sample Task 1" } }] },
+      "Status": { "select": { "name": "Not Started" } },
+      "Due Date": { "date": { "start": "2024-04-01" } },
+      "Notes": { "rich_text": [{ "text": { "content": "Sample notes" } }] }
+    }
+  ]
 }
 
-Never provide general instructions like "create a new page" or "click here". Instead, always provide specific technical specifications that can be implemented programmatically through the Notion API.
-
-IMPORTANT: Always use "rich_text" instead of "text" for text fields. The only valid property types are: title, rich_text, number, select, multi_select, date, formula, relation, rollup, files, checkbox, url, email, phone_number, created_time, created_by, last_edited_time, last_edited_by.`;
+IMPORTANT GUIDELINES:
+1. Always use "rich_text" instead of "text" for text content
+2. Every block must include "object": "block"
+3. Follow the exact Notion API block structure
+4. Include database_properties for database templates
+5. Provide realistic sample_data when relevant
+6. Use proper nesting for all properties
+7. Include color options for select/multi_select fields`;
 
 export const REFINEMENT_PROMPTS = {
   properties: `Based on the template specification provided, suggest additional properties that would enhance the functionality. Include exact Notion API configurations for each suggestion.`,
