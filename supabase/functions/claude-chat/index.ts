@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { validateMessages } from './validation.ts';
-import { handleError } from './error-handler.ts';
 import { SYSTEM_PROMPT } from './prompts.ts';
 import { Anthropic } from 'https://esm.sh/@anthropic-ai/sdk@0.14.1';
 
@@ -10,7 +9,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -18,8 +16,6 @@ serve(async (req) => {
   try {
     const { messages } = await req.json();
     
-    console.log('Processing template chat request:', { messages });
-
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       throw new Error('Invalid messages array');
     }
@@ -41,22 +37,21 @@ serve(async (req) => {
       system: SYSTEM_PROMPT,
     });
 
-    if (!claudeResponse || !claudeResponse.content || claudeResponse.content.length === 0) {
-      throw new Error('Empty response from Claude');
+    if (!claudeResponse?.content?.[0]?.text) {
+      throw new Error('Invalid response from Claude');
     }
 
-    const responseContent = claudeResponse.content[0]?.text;
+    const responseContent = claudeResponse.content[0].text;
     
-    if (!responseContent) {
-      throw new Error('No text content in response');
-    }
-
-    // Try to parse the response as JSON to validate it
+    // Validate JSON structure
     try {
-      JSON.parse(responseContent);
+      const parsed = JSON.parse(responseContent);
+      if (!parsed.template_name || !parsed.description || !parsed.blocks) {
+        throw new Error('Invalid template structure');
+      }
     } catch (error) {
-      console.error('Invalid JSON response from Claude:', responseContent);
-      throw new Error('Invalid JSON response from Claude');
+      console.error('JSON validation error:', error);
+      throw new Error('Invalid template structure returned by Claude');
     }
 
     return new Response(
@@ -71,9 +66,13 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in claude-chat function:', error);
-    const errorResponse = handleError(error);
     return new Response(
-      JSON.stringify({ error: errorResponse }),
+      JSON.stringify({ 
+        error: {
+          message: error.message || 'Internal server error',
+          details: error.stack
+        }
+      }),
       { 
         status: error.status || 500,
         headers: {

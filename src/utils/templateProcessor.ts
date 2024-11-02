@@ -22,13 +22,6 @@ interface DatabaseProperty {
 export interface TemplateStructure {
   template_name: string;
   description: string;
-  page_icon?: string;
-  cover?: {
-    type: string;
-    external?: {
-      url: string;
-    };
-  };
   blocks: any[];
   database_properties: Record<string, DatabaseProperty>;
   sample_data?: any[];
@@ -38,14 +31,18 @@ export function processTemplateResponse(response: string): TemplateStructure {
   try {
     const parsed = JSON.parse(response);
     
-    if (!parsed.template_name || !parsed.description || !parsed.blocks) {
-      throw new Error('Missing required template fields');
+    if (!parsed.template_name || !parsed.description) {
+      throw new Error('Missing required template fields: template_name or description');
     }
 
-    // Convert the new databases format to the expected database_properties format
+    if (!parsed.blocks || !Array.isArray(parsed.blocks)) {
+      throw new Error('Missing or invalid blocks array');
+    }
+
+    // Convert the databases format to database_properties
     const database_properties: Record<string, DatabaseProperty> = {};
     if (parsed.databases && parsed.databases.length > 0) {
-      const mainDatabase = parsed.databases[0]; // Take the first database
+      const mainDatabase = parsed.databases[0];
       if (mainDatabase.properties) {
         Object.entries(mainDatabase.properties).forEach(([key, value]) => {
           database_properties[key] = value as DatabaseProperty;
@@ -56,8 +53,6 @@ export function processTemplateResponse(response: string): TemplateStructure {
     return {
       template_name: parsed.template_name,
       description: parsed.description,
-      page_icon: parsed.page_icon,
-      cover: parsed.cover,
       blocks: parsed.blocks,
       database_properties,
       sample_data: parsed.sample_data || []
@@ -68,7 +63,7 @@ export function processTemplateResponse(response: string): TemplateStructure {
   }
 }
 
-export function validateTemplateSpec(spec: any): { isValid: boolean; error?: string; errorType?: string } {
+export function validateTemplateSpec(spec: any): { isValid: boolean; error?: string } {
   try {
     if (!spec || typeof spec !== 'object') {
       return { isValid: false, error: 'Invalid template specification format' };
@@ -80,20 +75,6 @@ export function validateTemplateSpec(spec: any): { isValid: boolean; error?: str
     
     if (!spec.blocks || !Array.isArray(spec.blocks)) {
       return { isValid: false, error: 'Missing or invalid blocks array' };
-    }
-
-    if (!spec.databases || !Array.isArray(spec.databases)) {
-      return { isValid: false, error: 'Missing or invalid databases array' };
-    }
-
-    for (const block of spec.blocks) {
-      if (!block.object || !block.type) {
-        return { 
-          isValid: false, 
-          error: 'Invalid block structure',
-          errorType: 'invalidBlock'
-        };
-      }
     }
 
     return { isValid: true };
