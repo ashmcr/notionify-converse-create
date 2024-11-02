@@ -48,29 +48,34 @@ serve(async (req) => {
     const data = await response.json();
     console.log('Claude API response:', data);
 
-    // The Claude-3 API returns the response in a different structure
+    // Extract the text content from the response
     if (!data.content || !Array.isArray(data.content)) {
       console.error('Invalid API response structure:', data);
       throw new Error('Invalid API response structure');
     }
 
-    // Extract the text content from the response
     const content = data.content[0]?.text;
     if (!content) {
       console.error('No content in response:', data);
       throw new Error('No content in response');
     }
 
-    // Try to parse JSON from the response
+    // Try to extract JSON from the content using regex
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('No JSON found in response:', content);
+      throw new Error('No valid JSON found in response');
+    }
+
     try {
-      const templateSpec = JSON.parse(content);
+      const templateSpec = JSON.parse(jsonMatch[0]);
       
       if (!templateSpec.template_name || !templateSpec.description || !templateSpec.blocks) {
         throw new Error('Invalid template format: Missing required fields');
       }
 
       return new Response(
-        JSON.stringify({ content: [{ text: content }] }),
+        JSON.stringify({ content: [{ text: jsonMatch[0] }] }),
         { 
           headers: {
             ...corsHeaders,
@@ -80,7 +85,7 @@ serve(async (req) => {
       );
     } catch (parseError) {
       console.error('JSON parsing error:', parseError);
-      throw new Error('Failed to parse template JSON from response');
+      throw new Error(`Failed to parse template JSON from response: ${parseError.message}`);
     }
 
   } catch (error) {
