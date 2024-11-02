@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { Anthropic } from "https://esm.sh/@anthropic-ai/sdk@0.4.3";
 import { validateMessages, validateTemplateSpec } from './validation.ts';
 import { handleError } from './error-handler.ts';
 import { SYSTEM_PROMPT, REFINEMENT_PROMPTS } from './prompts.ts';
@@ -29,16 +28,13 @@ serve(async (req) => {
         }]
       : validatedMessages;
 
-    const anthropic = new Anthropic({
-      apiKey: Deno.env.get('ANTHROPIC_API_KEY') || '',
-    });
-
+    // Make direct request to Anthropic API instead of using SDK
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
         'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') || '',
-        'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
         model: 'claude-3-sonnet-20240229',
