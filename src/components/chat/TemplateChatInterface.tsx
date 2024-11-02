@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
 import { ChatInput } from "./ChatInput";
+import { processTemplateResponse } from "@/utils/templateProcessor";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -16,11 +17,23 @@ const SYSTEM_PROMPT = `You are a Notion template expert. Help users create custo
 2. Suggesting appropriate database structures
 3. Recommending properties and views
 4. Providing best practices for their use case.
+
+When suggesting database properties, use this format:
+Property: [Property Name]: [Property Type]
+Options for [Property Name]: [comma-separated options] (for select properties)
+
+When suggesting views, use this format:
+View: [View Name]: [View Type]
+Properties for [View Name]: [comma-separated property names]
+
+For best practices and suggestions, start lines with "Suggestion:" or "Best Practice:"
+
 Always define clear database properties with specific types and options.`;
 
 export function TemplateChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [templateStructure, setTemplateStructure] = useState<any>(null);
   const session = useSession();
   const { toast } = useToast();
 
@@ -51,10 +64,24 @@ export function TemplateChatInterface() {
 
       if (response.error) throw response.error;
 
-      setMessages(prevMessages => [
-        ...prevMessages,
-        { role: 'assistant', content: response.data.content }
-      ]);
+      const assistantMessage = { 
+        role: 'assistant' as const, 
+        content: response.data.content 
+      };
+
+      setMessages(prevMessages => [...prevMessages, assistantMessage]);
+
+      // Process the response into template structure
+      const structure = processTemplateResponse(response.data.content);
+      setTemplateStructure(structure);
+
+      // Emit the template structure for preview
+      if (structure.properties.length > 0 || structure.views.length > 0) {
+        const event = new CustomEvent('templateUpdate', { 
+          detail: structure 
+        });
+        window.dispatchEvent(event);
+      }
 
     } catch (error: any) {
       console.error('Chat error:', error);
