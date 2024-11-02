@@ -1,8 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { validateMessages, validateTemplateSpec } from './validation.ts';
+import { validateMessages } from './validation.ts';
 import { handleError } from './error-handler.ts';
-import { SYSTEM_PROMPT, REFINEMENT_PROMPTS } from './prompts.ts';
-import type { ChatRequest } from './types.ts';
+import { SYSTEM_PROMPT } from './prompts.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,18 +14,11 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, refinementType } = await req.json() as ChatRequest;
+    const { messages } = await req.json();
     
-    console.log('Processing template chat request:', { messages, refinementType });
+    console.log('Processing template chat request:', { messages });
 
     const validatedMessages = validateMessages(messages);
-
-    const finalMessages = refinementType 
-      ? [...validatedMessages, {
-          role: 'user',
-          content: REFINEMENT_PROMPTS[refinementType as keyof typeof REFINEMENT_PROMPTS]
-        }]
-      : validatedMessages;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -40,7 +32,7 @@ serve(async (req) => {
         max_tokens: 4096,
         temperature: 0.2,
         system: SYSTEM_PROMPT,
-        messages: finalMessages.map(msg => ({
+        messages: validatedMessages.map(msg => ({
           role: msg.role,
           content: msg.content
         }))
@@ -71,18 +63,10 @@ serve(async (req) => {
       throw new Error('No valid JSON found in response');
     }
 
-    let templateSpec;
-    try {
-      templateSpec = JSON.parse(jsonMatch[0]);
-      
-      if (!templateSpec.template) {
-        throw new Error('Missing template object in response');
-      }
-
-      validateTemplateSpec(templateSpec);
-    } catch (error) {
-      console.error('Template validation error:', error);
-      throw new Error(`Invalid template format: ${error.message}`);
+    const templateSpec = JSON.parse(jsonMatch[0]);
+    
+    if (!templateSpec.template_name || !templateSpec.description || !templateSpec.blocks) {
+      throw new Error('Invalid template format: Missing required fields');
     }
 
     return new Response(

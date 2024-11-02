@@ -15,55 +15,27 @@ interface NotionView {
 }
 
 interface TemplateStructure {
-  properties: NotionProperty[];
-  views: NotionView[];
-  suggestions: string[];
-}
-
-interface TemplateSpec {
-  template: {
-    properties: Record<string, { 
-      type: string;
-      options?: string[];
-      formula?: { expression: string };
-    }>;
-    views: Array<{
-      type: string;
-      name: string;
-    }>;
-    automations?: string[];
-    sample_data?: any;
-  };
+  template_name: string;
+  description: string;
+  blocks: any[];
+  database_properties: Record<string, any>;
+  sample_data?: any[];
 }
 
 export function processTemplateResponse(response: string): TemplateStructure {
   try {
     const parsed = JSON.parse(response);
-    const template = parsed.template;
-
-    if (!template) {
-      throw new Error('Invalid template format');
+    
+    if (!parsed.template_name || !parsed.description || !parsed.blocks || !parsed.database_properties) {
+      throw new Error('Missing required template fields');
     }
 
     return {
-      properties: Object.entries(template.properties).map(([name, config]: [string, any]) => ({
-        name,
-        type: config.type,
-        options: config.options,
-        format: config.format,
-        formula: config.formula
-      })),
-      views: template.views.map((view: any) => ({
-        name: view.name,
-        type: view.type,
-        filter: view.filter,
-        sort: view.sort,
-        properties: view.properties
-      })),
-      suggestions: [
-        ...(template.automations || []),
-        ...(template.sample_data ? ['Sample data provided'] : [])
-      ]
+      template_name: parsed.template_name,
+      description: parsed.description,
+      blocks: parsed.blocks,
+      database_properties: parsed.database_properties,
+      sample_data: parsed.sample_data || []
     };
   } catch (error) {
     console.error('Template processing error:', error);
@@ -73,49 +45,26 @@ export function processTemplateResponse(response: string): TemplateStructure {
 
 export function validateTemplateSpec(content: string): { isValid: boolean; error?: string; errorType?: string } {
   try {
-    const spec = JSON.parse(content) as TemplateSpec;
+    const spec = JSON.parse(content);
     
-    if (!spec.template) {
-      return { isValid: false, error: 'Missing template object in specification' };
+    if (!spec.template_name || !spec.description) {
+      return { isValid: false, error: 'Missing template name or description' };
     }
     
-    if (!spec.template.properties) {
-      return { isValid: false, error: 'Missing properties configuration' };
+    if (!spec.blocks || !Array.isArray(spec.blocks)) {
+      return { isValid: false, error: 'Missing or invalid blocks array' };
     }
 
-    for (const [key, prop] of Object.entries(spec.template.properties)) {
-      if (!prop.type) {
+    if (!spec.database_properties || typeof spec.database_properties !== 'object') {
+      return { isValid: false, error: 'Missing or invalid database properties' };
+    }
+
+    for (const block of spec.blocks) {
+      if (!block.object || !block.type) {
         return { 
           isValid: false, 
-          error: `Invalid property configuration for "${key}": missing type`,
-          errorType: 'invalidProperty'
-        };
-      }
-    }
-
-    if (!spec.template.views || !Array.isArray(spec.template.views)) {
-      return { isValid: false, error: 'Missing or invalid views configuration' };
-    }
-
-    for (const view of spec.template.views) {
-      if (!view.type || !view.name) {
-        return { 
-          isValid: false, 
-          error: 'Invalid view configuration: missing type or name',
-          errorType: 'invalidView'
-        };
-      }
-    }
-
-    const formulas = Object.values(spec.template.properties)
-      .filter((prop) => prop.type === 'formula');
-    
-    for (const formula of formulas) {
-      if (!formula.formula?.expression) {
-        return { 
-          isValid: false, 
-          error: 'Invalid formula configuration: missing expression',
-          errorType: 'formulaError'
+          error: 'Invalid block structure',
+          errorType: 'invalidBlock'
         };
       }
     }
