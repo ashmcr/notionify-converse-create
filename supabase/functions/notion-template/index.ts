@@ -21,56 +21,75 @@ async function createTemplateInNotion(spec: TemplateSpec) {
     auth: Deno.env.get('NOTION_ADMIN_TOKEN')
   });
 
+  const templateDbId = Deno.env.get('NOTION_TEMPLATE_DB_ID');
+  if (!templateDbId) {
+    throw new Error('Template database ID not configured');
+  }
+
   try {
-    // Create a new page in the workspace root
+    // First, create the template entry in the templates database
+    console.log('[notion] Creating template entry in database:', templateDbId);
     const templatePage = await notion.pages.create({
       parent: {
-        type: 'workspace',
-        workspace: true
+        database_id: templateDbId
       },
       properties: {
-        title: [{ text: { content: spec.template_name } }]
+        Name: {
+          title: [{ text: { content: spec.template_name } }]
+        },
+        Description: {
+          rich_text: [{ text: { content: spec.description } }]
+        },
+        Status: {
+          select: { name: 'draft' }
+        }
       }
     });
 
     console.log('[notion] Created template page:', templatePage.id);
 
-    // Add template content
-    await notion.blocks.children.append({
-      block_id: templatePage.id,
-      children: spec.blocks
-    });
-
-    console.log('[notion] Added template content');
+    // Add template content blocks
+    if (spec.blocks && spec.blocks.length > 0) {
+      console.log('[notion] Adding template blocks');
+      await notion.blocks.children.append({
+        block_id: templatePage.id,
+        children: spec.blocks
+      });
+    }
 
     // If template includes a database, create it
     if (spec.database_properties) {
+      console.log('[notion] Creating template database');
       const database = await notion.databases.create({
         parent: { page_id: templatePage.id },
         title: [{ text: { content: `${spec.template_name} Database` } }],
         properties: spec.database_properties
       });
 
-      console.log('[notion] Created inner database:', database.id);
+      console.log('[notion] Created database:', database.id);
 
       // Add sample data if provided
-      if (spec.sample_data) {
+      if (spec.sample_data && spec.sample_data.length > 0) {
+        console.log('[notion] Adding sample data');
         for (const item of spec.sample_data) {
           await notion.pages.create({
             parent: { database_id: database.id },
             properties: item
           });
         }
-        console.log('[notion] Added sample data');
       }
     }
 
-    // Make template public
+    // Make template public and update status
+    console.log('[notion] Publishing template');
     const publicPage = await notion.pages.update({
       page_id: templatePage.id,
       properties: {
         Status: {
           select: { name: 'published' }
+        },
+        PublicURL: {
+          url: `https://notion.so/${templatePage.id}`
         }
       }
     });
