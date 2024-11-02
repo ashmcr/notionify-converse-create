@@ -26,10 +26,13 @@ serve(async (req) => {
   }
 
   try {
-    const { code } = await req.json();
+    const { code, redirectUri } = await req.json();
     const authHeader = req.headers.get('Authorization');
 
-    console.log('Request payload:', { code: code ? 'present' : 'missing' });
+    console.log('Request payload:', { 
+      code: code ? 'present' : 'missing',
+      redirectUri: redirectUri || 'missing'
+    });
     console.log('Auth header:', authHeader ? 'present' : 'missing');
 
     if (!code) {
@@ -65,7 +68,7 @@ serve(async (req) => {
       body: JSON.stringify({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: `${new URL(req.url).origin}/settings`,
+        redirect_uri: redirectUri,
       }),
     });
 

@@ -83,7 +83,7 @@ export default function Settings() {
     
     setIsConnecting(true);
     try {
-      console.log('Starting Notion OAuth process...');
+      console.log('Starting Notion OAuth process with code:', code);
       
       // First, get a fresh session token
       const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -91,6 +91,7 @@ export default function Settings() {
         throw new Error('No valid session token');
       }
 
+      console.log('Got fresh session token, invoking edge function...');
       const { data, error } = await supabase.functions.invoke('notion-oauth', {
         body: { 
           code,
@@ -101,10 +102,10 @@ export default function Settings() {
         },
       });
 
-      console.log('Response from notion-oauth function:', { data, error });
+      console.log('Edge function response:', { data, error });
 
       if (error) {
-        console.error('Notion OAuth error:', error);
+        console.error('Edge function error:', error);
         throw error;
       }
       
@@ -148,6 +149,7 @@ export default function Settings() {
     }
 
     if (code) {
+      console.log('Detected Notion callback code, initiating OAuth process...');
       handleNotionCallback(code);
     }
   }, []);
