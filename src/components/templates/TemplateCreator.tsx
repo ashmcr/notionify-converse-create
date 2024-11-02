@@ -15,7 +15,9 @@ const TEMPLATE_CATEGORIES = [
   "Content Planning",
   "Knowledge Base",
   "Custom"
-];
+] as const;
+
+type TemplateCategory = typeof TEMPLATE_CATEGORIES[number];
 
 export function TemplateCreator() {
   const session = useSession();
@@ -23,12 +25,12 @@ export function TemplateCreator() {
   const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(TEMPLATE_CATEGORIES[0]);
+  const [category, setCategory] = useState<TemplateCategory>(TEMPLATE_CATEGORIES[0]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!session) {
+    if (!session?.user?.id) {
       toast({
         title: "Error",
         description: "You must be logged in to create templates",
@@ -44,8 +46,8 @@ export function TemplateCreator() {
       const response = await supabase.functions.invoke('notion-template', {
         body: {
           templateData: {
-            name,
-            description,
+            name: name.trim(),
+            description: description.trim(),
             category,
             blocks: [] // Add default blocks if needed
           }
@@ -54,12 +56,16 @@ export function TemplateCreator() {
 
       if (response.error) throw response.error;
 
+      if (!response.data?.templateId || !response.data?.publicUrl) {
+        throw new Error('Invalid response from template creation');
+      }
+
       // Track template creation
       const { error: dbError } = await supabase
         .from('template_generations')
         .insert({
-          name,
-          description,
+          name: name.trim(),
+          description: description.trim(),
           user_id: session.user.id,
           notion_page_id: response.data.templateId,
           template_url: response.data.publicUrl
@@ -120,7 +126,7 @@ export function TemplateCreator() {
 
           <div className="space-y-2">
             <label htmlFor="category" className="text-sm font-medium">Category</label>
-            <Select value={category} onValueChange={setCategory}>
+            <Select value={category} onValueChange={(value: TemplateCategory) => setCategory(value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
