@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Message, ChatResponse, TemplateResponse, ChatError, TemplateStructure } from "../types/chatTypes";
 import { processTemplateResponse } from "@/utils/templateProcessor";
-import { ToastAction } from "@/components/ui/toast";
+import { ToastTemplateAction } from "../ToastTemplateAction";
 
 const INITIAL_MESSAGE: Message = {
   role: 'assistant',
@@ -51,11 +51,7 @@ export function useTemplateChat() {
         toast({
           title: "Success",
           description: "Template created! Click to view.",
-          action: (
-            <ToastAction altText="View template" onClick={() => window.open(data.url || '', '_blank')}>
-              Open Template
-            </ToastAction>
-          )
+          action: <ToastTemplateAction url={data.url || ''} />
         });
       } else {
         throw new Error(data.error?.message || 'Failed to create template');
