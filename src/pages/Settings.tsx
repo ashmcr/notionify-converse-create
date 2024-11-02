@@ -84,10 +84,20 @@ export default function Settings() {
     setIsConnecting(true);
     try {
       console.log('Starting Notion OAuth process...');
+      
+      // First, get a fresh session token
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession?.access_token) {
+        throw new Error('No valid session token');
+      }
+
       const { data, error } = await supabase.functions.invoke('notion-oauth', {
-        body: { code },
+        body: { 
+          code,
+          redirectUri: NOTION_REDIRECT_URI 
+        },
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${currentSession.access_token}`,
         },
       });
 
