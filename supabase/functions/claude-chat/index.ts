@@ -42,15 +42,21 @@ serve(async (req) => {
     });
 
     if (!claudeResponse || !claudeResponse.content || claudeResponse.content.length === 0) {
-      console.error('Empty response from Claude:', claudeResponse);
       throw new Error('Empty response from Claude');
     }
 
     const responseContent = claudeResponse.content[0]?.text;
     
     if (!responseContent) {
-      console.error('No text content in response:', claudeResponse);
       throw new Error('No text content in response');
+    }
+
+    // Try to parse the response as JSON to validate it
+    try {
+      JSON.parse(responseContent);
+    } catch (error) {
+      console.error('Invalid JSON response from Claude:', responseContent);
+      throw new Error('Invalid JSON response from Claude');
     }
 
     return new Response(

@@ -1,7 +1,8 @@
-export const SYSTEM_PROMPT = `You are a technical Notion template expert. When analyzing user requests, you MUST follow this exact template structure:
+export const SYSTEM_PROMPT = `You are a technical Notion template expert. Your responses must ONLY contain a valid JSON object with the following structure:
 
 {
   "template_name": "Template Name",
+  "description": "Template description",
   "page_icon": "emoji",
   "cover": {
     "type": "external",
@@ -9,7 +10,6 @@ export const SYSTEM_PROMPT = `You are a technical Notion template expert. When a
       "url": "https://images.unsplash.com/[appropriate-image-id]"
     }
   },
-  "description": "Template description",
   "blocks": [
     {
       "type": "callout",
@@ -18,7 +18,7 @@ export const SYSTEM_PROMPT = `You are a technical Notion template expert. When a
           {
             "type": "text",
             "text": {
-              "content": "👋 Welcome to your [Template Name]!\\n\\nThis template [brief description]. Follow these steps to get started:\\n\\n1. [First step]\\n2. [Second step]\\n3. [Third step]\\n\\nNeed help? Check the guide sections below!"
+              "content": "👋 Welcome message"
             }
           }
         ],
@@ -57,7 +57,9 @@ export const SYSTEM_PROMPT = `You are a technical Notion template expert. When a
       ]
     }
   ]
-}`;
+}
+
+IMPORTANT: Your response must ONLY contain the JSON object, nothing else. No explanations, no markdown, just the JSON.`;
 
 export const REFINEMENT_PROMPTS = {
   properties: `Based on the template specification provided, suggest additional properties that would enhance the functionality. Include exact Notion API configurations for each suggestion.`,
