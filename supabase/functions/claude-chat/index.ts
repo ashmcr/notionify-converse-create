@@ -9,6 +9,72 @@ const corsHeaders = {
 
 const SYSTEM_PROMPT = `You are a helpful assistant trained to create Notion templates based on user input and specifications. Your responses should be clear, detailed, and follow Notion API specifications where applicable.`
 
+const ErrorTypes = {
+  INVALID_REQUEST: 'INVALID_REQUEST',
+  API_ERROR: 'API_ERROR',
+  RATE_LIMIT: 'RATE_LIMIT',
+  VALIDATION_ERROR: 'VALIDATION_ERROR'
+};
+
+function validateMessages(messages: any[]): { role: string; content: string; }[] {
+  if (!Array.isArray(messages)) {
+    throw new Error('Messages must be an array');
+  }
+
+  return messages.map(msg => {
+    if (!msg.content || typeof msg.content !== 'string') {
+      throw new Error('Each message must have a content string');
+    }
+
+    if (!['user', 'assistant', 'system'].includes(msg.role)) {
+      throw new Error('Message role must be either "user", "system", or "assistant"');
+    }
+
+    return {
+      role: msg.role,
+      content: msg.content.trim()
+    };
+  });
+}
+
+function handleError(error: any) {
+  console.error('Error details:', {
+    name: error.name,
+    message: error.message,
+    status: error.status
+  });
+
+  if (error.status === 400) {
+    return {
+      type: ErrorTypes.INVALID_REQUEST,
+      message: 'Invalid request format',
+      details: error.message
+    };
+  }
+
+  if (error.status === 429) {
+    return {
+      type: ErrorTypes.RATE_LIMIT,
+      message: 'Rate limit exceeded',
+      details: error.message
+    };
+  }
+
+  if (error.message?.includes('validation')) {
+    return {
+      type: ErrorTypes.VALIDATION_ERROR,
+      message: 'Message validation failed',
+      details: error.message
+    };
+  }
+
+  return {
+    type: ErrorTypes.API_ERROR,
+    message: 'Internal server error',
+    details: error.message
+  };
+}
+
 const REFINEMENT_PROMPTS = {
   properties: `Based on the template specification provided, suggest additional properties that would enhance the functionality. Include exact Notion API configurations for each suggestion.`,
   views: `Analyze the current view configurations and recommend additional views that would improve data visualization and workflow. Provide complete view specifications.`,
@@ -80,10 +146,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
-      headers: {
-        ...corsHeaders,
-        'Content-Length': '0',
-      }
+      headers: corsHeaders
     });
   }
 
@@ -92,14 +155,17 @@ serve(async (req) => {
     
     console.log('Processing template chat request:', { messages, refinementType });
 
-    const lastAssistantMessage = messages
+    // Validate messages
+    const validatedMessages = validateMessages(messages);
+
+    const lastAssistantMessage = validatedMessages
       .filter(m => m.role === 'assistant')
       .pop();
 
     if (lastAssistantMessage) {
       const validation = validateTemplateSpec(lastAssistantMessage.content);
       if (!validation.isValid && validation.errorType) {
-        messages.push({
+        validatedMessages.push({
           role: 'user',
           content: ERROR_PROMPTS[validation.errorType as keyof typeof ERROR_PROMPTS]
             .replace('{error}', validation.error || 'Unknown error')
@@ -109,13 +175,13 @@ serve(async (req) => {
 
     const finalMessages = refinementType 
       ? [
-          ...messages,
+          ...validatedMessages,
           {
             role: 'user',
             content: REFINEMENT_PROMPTS[refinementType as keyof typeof REFINEMENT_PROMPTS]
           }
         ]
-      : messages;
+      : validatedMessages;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -142,7 +208,8 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status} ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Anthropic API error: ${response.status} ${response.statusText}\n${JSON.stringify(errorData)}`);
     }
 
     const data = await response.json();
@@ -167,10 +234,11 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in claude-chat function:', error);
     
+    const errorResponse = handleError(error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorResponse }),
       { 
-        status: 500,
+        status: error.status || 500,
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json'
