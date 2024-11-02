@@ -32,6 +32,44 @@ const ERROR_MESSAGES: Record<string, string> = {
   NETWORK_ERROR: "Network error. Please check your connection and try again."
 };
 
+async function handleTemplateChat(messages: Message[]) {
+  try {
+    const response = await supabase.functions.invoke('claude-chat', {
+      body: { messages }
+    });
+
+    if (response.error) {
+      throw {
+        code: 'SERVICE_UNAVAILABLE',
+        message: response.error.message || 'Failed to process template request'
+      };
+    }
+
+    if (!response.data) {
+      throw {
+        code: 'INVALID_STRUCTURE',
+        message: 'Invalid response from template service'
+      };
+    }
+
+    if (response.data.error) {
+      throw {
+        code: response.data.error.code || 'SERVICE_UNAVAILABLE',
+        message: response.data.error.message || response.data.error.details
+      };
+    }
+
+    return response.data;
+
+  } catch (error: any) {
+    console.error('Chat error:', error);
+    throw {
+      code: error.code || 'NETWORK_ERROR',
+      message: error.message || 'Failed to process template request'
+    };
+  }
+}
+
 export function TemplateChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,69 +88,24 @@ export function TemplateChatInterface() {
     console.error('Chat error:', error);
     setError(null);
 
-    const errorMessage = ERROR_MESSAGES[error.code] || ERROR_MESSAGES.NETWORK_ERROR;
+    const errorMessage = ERROR_MESSAGES[error.code] || error.message || ERROR_MESSAGES.NETWORK_ERROR;
     setError(errorMessage);
 
     toast({
       title: "Error",
-      description: error.message || "An unexpected error occurred",
+      description: errorMessage,
       variant: "destructive"
     });
   };
 
-  const handleTemplateCreation = async (claudeResponse: string) => {
-    try {
-      const response = await supabase.functions.invoke('claude-chat', {
-        body: {
-          messages: [
-            { role: 'assistant', content: claudeResponse }
-          ]
-        }
-      });
-
-      if (response.error) throw response.error;
-      const data = response.data;
-
-      if (data.success) {
-        toast({
-          title: "Success",
-          description: "Template created! Click to view.",
-          action: (
-            <ToastAction 
-              altText="View template"
-              onClick={() => window.open(data.url, '_blank')}
-            >
-              Open Template
-            </ToastAction>
-          )
-        });
-      } else {
-        throw new Error(data.error?.message || 'Failed to create template');
-      }
-
-    } catch (error: any) {
-      console.error('Template creation error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create template",
-        variant: "destructive"
-      });
-    }
-  };
-
   const handleUserMessage = async (userInput: string) => {
     if (!session?.user?.id) {
-      setError(ERROR_MESSAGES.UNAUTHORIZED);
-      toast({
-        title: "Error",
-        description: ERROR_MESSAGES.UNAUTHORIZED,
-        variant: "destructive"
-      });
+      handleError({ code: 'UNAUTHORIZED', message: ERROR_MESSAGES.UNAUTHORIZED });
       return;
     }
 
     if (!userInput.trim()) {
-      setError(ERROR_MESSAGES.VALIDATION_ERROR);
+      handleError({ code: 'VALIDATION_ERROR', message: ERROR_MESSAGES.VALIDATION_ERROR });
       return;
     }
 
@@ -122,33 +115,34 @@ export function TemplateChatInterface() {
       const newMessage: Message = { role: 'user', content: userInput };
       setMessages(prevMessages => [...prevMessages, newMessage]);
 
-      const response = await supabase.functions.invoke('claude-chat', {
-        body: {
-          messages: [
-            ...messages.map(msg => ({
-              role: msg.role,
-              content: typeof msg.content === 'string' ? msg.content : msg.content.map(c => c.text).join('\n')
-            })),
-            { role: 'user', content: userInput }
-          ]
-        }
-      });
+      const chatResponse = await handleTemplateChat([
+        ...messages.map(msg => ({
+          role: msg.role,
+          content: typeof msg.content === 'string' ? msg.content : msg.content.map(c => c.text).join('\n')
+        })),
+        { role: 'user', content: userInput }
+      ]);
 
-      if (response.error) throw response.error;
+      if (!chatResponse) {
+        throw { code: 'SERVICE_UNAVAILABLE', message: ERROR_MESSAGES.SERVICE_UNAVAILABLE };
+      }
 
       const assistantMessage = { 
         role: 'assistant' as const, 
-        content: response.data.content 
+        content: chatResponse.content 
       };
 
       setMessages(prevMessages => [...prevMessages, assistantMessage]);
 
       try {
-        const structure = processTemplateResponse(response.data.content[0].text);
+        const structure = processTemplateResponse(chatResponse.content[0].text);
         setTemplateStructure(structure);
       } catch (parseError) {
         console.error('Template parsing error:', parseError);
-        setError(ERROR_MESSAGES.INVALID_STRUCTURE);
+        handleError({ 
+          code: 'INVALID_STRUCTURE', 
+          message: ERROR_MESSAGES.INVALID_STRUCTURE 
+        });
       }
 
     } catch (error: any) {
