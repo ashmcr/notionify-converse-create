@@ -7,6 +7,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { TemplateDbInitDialog } from "@/components/notion/TemplateDbInitDialog";
 
 const NOTION_CLIENT_ID = import.meta.env.VITE_NOTION_CLIENT_ID;
 const NOTION_REDIRECT_URI = `${window.location.origin}/settings`;
@@ -17,6 +18,7 @@ export default function Settings() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [showInitDialog, setShowInitDialog] = useState(false);
 
   useEffect(() => {
     if (!session) {
@@ -91,6 +93,9 @@ export default function Settings() {
       });
 
       await fetchProfile();
+      
+      // Show template database initialization dialog
+      setShowInitDialog(true);
     } catch (error: any) {
       toast({
         title: "Error connecting Notion",
@@ -166,6 +171,11 @@ export default function Settings() {
             )}
           </CardContent>
         </Card>
+
+        <TemplateDbInitDialog 
+          open={showInitDialog} 
+          onOpenChange={setShowInitDialog} 
+        />
       </div>
     </MainLayout>
   );
