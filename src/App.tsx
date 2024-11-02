@@ -10,7 +10,6 @@ import AuthForm from "./components/auth/AuthForm";
 
 const queryClient = new QueryClient();
 
-// Protected Route wrapper component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const session = useSession();
   
@@ -38,7 +37,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            {/* Add other protected routes here */}
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
