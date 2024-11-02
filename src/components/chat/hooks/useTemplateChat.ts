@@ -39,9 +39,9 @@ export function useTemplateChat() {
 
   const handleTemplateCreation = async (templateSpec: string) => {
     try {
-      // Parse and validate the template specification
       const parsedSpec = JSON.parse(templateSpec);
       
+      // Validate required fields
       if (!parsedSpec.template_name || !parsedSpec.description || !parsedSpec.blocks) {
         throw new Error('Invalid template specification: missing required fields');
       }
@@ -59,8 +59,9 @@ export function useTemplateChat() {
       });
 
       if (response.error) throw response.error;
+      
       const data = response.data as TemplateResponse;
-
+      
       if (!data.success) {
         throw new Error(data.error?.message || 'Failed to create template');
       }

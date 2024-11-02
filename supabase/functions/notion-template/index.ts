@@ -93,6 +93,7 @@ async function createTemplateInNotion(spec: TemplateSpec) {
     console.log('[notion] Template published:', publicPage.id);
 
     return {
+      success: true,
       templateId: templatePage.id,
       publicUrl: `https://notion.so/${templatePage.id}`
     };
@@ -109,20 +110,23 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('Missing authorization header');
-    }
-
-    // Get template specification from request
     const { templateSpec } = await req.json();
-    if (!templateSpec) {
-      throw new Error('Missing template specification');
-    }
-
-    // Validate template specification
-    if (!templateSpec.template_name || !templateSpec.description) {
-      throw new Error('Missing required fields in template specification');
+    
+    // Validate required fields
+    if (!templateSpec || !templateSpec.template_name || !templateSpec.description || !templateSpec.blocks) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: { message: 'Missing required fields in template specification' }
+        }),
+        { 
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
     }
 
     // Create template in Notion
@@ -143,10 +147,11 @@ serve(async (req) => {
     
     return new Response(
       JSON.stringify({
-        error: error.message || 'Internal server error'
+        success: false,
+        error: { message: error.message || 'Internal server error' }
       }),
       { 
-        status: 400,
+        status: 500,
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json'
