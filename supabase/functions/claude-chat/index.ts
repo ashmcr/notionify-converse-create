@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { Anthropic } from 'https://esm.sh/@anthropic-ai/sdk@0.4.3'
+import { Client } from 'https://esm.sh/@anthropic-ai/sdk@0.4.3'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -83,7 +83,6 @@ function validateTemplateSpec(content: string): { isValid: boolean; error?: stri
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -99,7 +98,6 @@ serve(async (req) => {
     
     console.log('Processing template chat request:', { messages, refinementType });
 
-    // Validate the last assistant message if it exists
     const lastAssistantMessage = messages
       .filter(m => m.role === 'assistant')
       .pop();
@@ -125,7 +123,7 @@ serve(async (req) => {
         ]
       : messages;
 
-    const anthropic = new Anthropic({
+    const anthropic = new Client({
       apiKey: Deno.env.get('ANTHROPIC_API_KEY'),
     });
 
@@ -147,7 +145,6 @@ serve(async (req) => {
 
     console.log('Claude API response:', JSON.stringify(response));
 
-    // Validate template specification
     const validation = validateTemplateSpec(response.content[0].text);
     if (!validation.isValid) {
       throw new Error(validation.error || 'Invalid template specification format');
