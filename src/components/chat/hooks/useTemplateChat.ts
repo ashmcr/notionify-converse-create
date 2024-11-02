@@ -39,8 +39,23 @@ export function useTemplateChat() {
 
   const handleTemplateCreation = async (templateSpec: string) => {
     try {
+      // Parse and validate the template specification
+      const parsedSpec = JSON.parse(templateSpec);
+      
+      if (!parsedSpec.template_name || !parsedSpec.description || !parsedSpec.blocks) {
+        throw new Error('Invalid template specification: missing required fields');
+      }
+
       const response = await supabase.functions.invoke('notion-template', {
-        body: { templateSpec }
+        body: { 
+          templateSpec: {
+            template_name: parsedSpec.template_name,
+            description: parsedSpec.description,
+            blocks: parsedSpec.blocks,
+            database_properties: parsedSpec.database_properties || {},
+            sample_data: parsedSpec.sample_data || []
+          }
+        }
       });
 
       if (response.error) throw response.error;
@@ -49,11 +64,16 @@ export function useTemplateChat() {
       if (!data.success) {
         throw new Error(data.error?.message || 'Failed to create template');
       }
+
+      toast({
+        title: "Success",
+        description: "Template created successfully",
+      });
     } catch (error: any) {
       console.error('Template creation error:', error);
       toast({
         title: "Error",
-        description: "Failed to create template",
+        description: error.message || "Failed to create template",
         variant: "destructive"
       });
     }
