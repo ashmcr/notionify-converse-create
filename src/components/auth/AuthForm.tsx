@@ -17,6 +17,22 @@ const AuthForm = () => {
     }
   }, [session, navigate]);
 
+  // Set up auth state change listener for error handling
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'USER_DELETED' || event === 'SIGNED_OUT') {
+        toast({
+          title: "Signed out",
+          description: "You have been signed out successfully",
+        });
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [toast]);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-notion-50">
       <div className="w-full max-w-md p-8 bg-white rounded-xl shadow-sm">
@@ -36,13 +52,6 @@ const AuthForm = () => {
           }}
           providers={[]}
           redirectTo={window.location.origin}
-          onAuthError={(error) => {
-            toast({
-              title: "Authentication Error",
-              description: error.message,
-              variant: "destructive",
-            });
-          }}
         />
       </div>
     </div>
