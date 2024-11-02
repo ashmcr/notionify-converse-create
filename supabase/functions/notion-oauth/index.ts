@@ -18,6 +18,7 @@ serve(async (req) => {
   console.log('Received request:', {
     method: req.method,
     url: req.url,
+    headers: Object.fromEntries(req.headers.entries()),
   });
 
   // Handle CORS preflight request
@@ -28,16 +29,35 @@ serve(async (req) => {
 
   try {
     // Parse the request body
-    const { code } = await req.json();
-    console.log('Received authorization code');
+    const requestData = await req.json();
+    const { code } = requestData;
+    console.log('Received request data:', { code: code ? 'present' : 'missing' });
 
     if (!code) {
       throw new Error('No authorization code provided');
     }
 
+    // Get authorization header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      throw new Error('No authorization header provided');
+    }
+
     // Initialize Supabase client
     console.log('Initializing Supabase client');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Get user from token
+    const token = authHeader.replace('Bearer ', '');
+    console.log('Getting user from session token');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      throw new Error('Invalid session');
+    }
+
+    console.log('User authenticated:', user.id);
 
     // Exchange the authorization code for an access token
     console.log('Exchanging code for Notion access token');
@@ -67,23 +87,6 @@ serve(async (req) => {
       workspace_id: data.workspace_id,
       workspace_name: data.workspace_name,
     });
-
-    // Get the user from the authorization header
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      throw new Error('No authorization header');
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    console.log('Getting user from session token');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      console.error('Auth error:', authError);
-      throw new Error('Invalid session');
-    }
-
-    console.log('User authenticated:', user.id);
 
     // Update the user's profile with Notion credentials
     console.log('Updating user profile');

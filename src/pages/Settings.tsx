@@ -34,7 +34,7 @@ export default function Settings() {
     const error = params.get('error');
     
     if (code) {
-      console.log('Received Notion authorization code');
+      console.log('Received Notion authorization code:', code);
       handleNotionCallback(code);
     } else if (error) {
       console.error('Notion authorization error:', error);
@@ -49,15 +49,24 @@ export default function Settings() {
   const handleNotionCallback = async (code: string) => {
     try {
       setIsConnecting(true);
-      console.log('Calling notion-oauth function...');
+      console.log('Calling notion-oauth function with code...');
       
       const { data, error } = await supabase.functions.invoke('notion-oauth', {
         body: { code },
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
       });
 
       console.log('Notion OAuth response:', { data, error });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(error.message || 'Failed to connect to Notion');
+      }
+
+      if (!data?.success) {
+        throw new Error('Invalid response from Notion OAuth');
+      }
 
       toast({
         title: "Success",
@@ -75,6 +84,8 @@ export default function Settings() {
       });
     } finally {
       setIsConnecting(false);
+      // Clear the URL parameters
+      window.history.replaceState({}, '', '/settings');
     }
   };
 
