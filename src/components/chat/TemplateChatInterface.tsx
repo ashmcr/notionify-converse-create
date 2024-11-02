@@ -7,6 +7,7 @@ import { TypingIndicator } from "./TypingIndicator";
 import { ChatInput } from "./ChatInput";
 import { processTemplateResponse } from "@/utils/templateProcessor";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ToastAction } from "@/components/ui/toast";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -85,10 +86,14 @@ export function TemplateChatInterface() {
         toast({
           title: "Success",
           description: "Template created! Click to view.",
-          action: {
-            label: "Open Template",
-            onClick: () => window.open(data.url, '_blank')
-          }
+          action: (
+            <ToastAction 
+              altText="View template"
+              onClick={() => window.open(data.url, '_blank')}
+            >
+              Open Template
+            </ToastAction>
+          )
         });
       } else {
         throw new Error(data.error?.message || 'Failed to create template');
