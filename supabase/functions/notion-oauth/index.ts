@@ -1,69 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
-import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts";
+import { verifyJWT } from "./auth.ts";
+import { exchangeCodeForToken } from "./notion.ts";
+import { corsHeaders, createErrorResponse } from "./utils.ts";
 
-const NOTION_CLIENT_ID = Deno.env.get('NOTION_CLIENT_ID')!;
-const NOTION_CLIENT_SECRET = Deno.env.get('NOTION_CLIENT_SECRET')!;
+const FRONTEND_URL = 'https://notionify-converse-create.vercel.app';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const FRONTEND_URL = 'https://notionify-converse-create.vercel.app';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Max-Age': '86400',
-};
-
-const createErrorResponse = (status: number, message: string, details?: any) => {
-  console.error(`Error: ${message}`, details);
-  return new Response(
-    JSON.stringify({
-      error: {
-        message,
-        details,
-        status,
-      }
-    }),
-    {
-      status,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-      }
-    }
-  );
-};
-
-async function verifyJWT(token: string) {
-  try {
-    console.log('Starting JWT verification');
-    const jwt = token.replace('Bearer ', '');
-    
-    const jwtSecret = Deno.env.get('JWT_SECRET');
-    if (!jwtSecret) {
-      console.error('JWT_SECRET is not set in environment variables');
-      return null;
-    }
-
-    console.log('Attempting to verify JWT...');
-    const { payload } = await jose.jwtVerify(
-      jwt,
-      new TextEncoder().encode(jwtSecret)
-    );
-    console.log('JWT verified successfully:', payload);
-    return payload;
-  } catch (error) {
-    console.error('JWT verification failed:', error);
-    return null;
-  }
-}
 
 serve(async (req) => {
-  console.log('Received request:', {
+  console.log('[server] Received request:', {
     method: req.method,
     url: req.url,
-    headers: Object.fromEntries(req.headers.entries()),
   });
 
   // Handle CORS preflight requests
@@ -79,7 +27,7 @@ serve(async (req) => {
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
 
-    console.log('Received params:', { 
+    console.log('[server] Received params:', { 
       hasCode: !!code,
       hasState: !!state 
     });
@@ -93,93 +41,48 @@ serve(async (req) => {
     }
 
     // Verify JWT from state parameter
-    console.log('Verifying state token...');
+    console.log('[server] Verifying state token...');
     const payload = await verifyJWT(state);
     if (!payload) {
       return createErrorResponse(401, 'Invalid or expired state token');
     }
 
+    // Exchange code for Notion access token
+    const notionData = await exchangeCodeForToken(code);
+    if (!notionData) {
+      return createErrorResponse(500, 'Failed to exchange code for access token');
+    }
+
     // Initialize Supabase client
-    console.log('Initializing Supabase client');
+    console.log('[server] Updating user profile');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Exchange the authorization code for an access token with retry logic
-    console.log('Exchanging code for Notion access token');
-    let notionResponse;
-    let retryCount = 0;
-    const maxRetries = 3;
-
-    while (retryCount < maxRetries) {
-      try {
-        notionResponse = await fetch('https://api.notion.com/v1/oauth/token', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Basic ${btoa(`${NOTION_CLIENT_ID}:${NOTION_CLIENT_SECRET}`)}`,
-            'Content-Type': 'application/json',
-            'Notion-Version': '2022-06-28',
-          },
-          body: JSON.stringify({
-            grant_type: 'authorization_code',
-            code,
-            redirect_uri: `${SUPABASE_URL}/functions/v1/notion-oauth`,
-          }),
-        });
-
-        if (notionResponse.ok) break;
-
-        if (notionResponse.status === 429) {
-          const retryAfter = notionResponse.headers.get('Retry-After') || '5';
-          await new Promise(resolve => setTimeout(resolve, parseInt(retryAfter) * 1000));
-        } else if (!notionResponse.ok) {
-          throw new Error(`Notion API error: ${await notionResponse.text()}`);
-        }
-
-        retryCount++;
-      } catch (error) {
-        console.error(`Attempt ${retryCount + 1} failed:`, error);
-        if (retryCount === maxRetries - 1) throw error;
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
-      }
-    }
-
-    if (!notionResponse?.ok) {
-      return createErrorResponse(notionResponse?.status || 500, 'Failed to exchange code for access token');
-    }
-
-    const data = await notionResponse.json();
-    console.log('Notion OAuth successful:', {
-      workspace_id: data.workspace_id,
-      workspace_name: data.workspace_name,
-    });
-
     // Get user from state token
-    console.log('Getting user from state token');
     const { data: { user }, error: authError } = await supabase.auth.getUser(state);
     
     if (authError || !user) {
-      console.error('Auth error:', authError);
+      console.error('[server] Auth error:', authError);
       return createErrorResponse(401, 'Invalid session');
     }
 
-    console.log('User authenticated:', user.id);
+    console.log('[server] User authenticated:', user.id);
 
     // Update the user's profile with Notion credentials
-    console.log('Updating user profile');
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
-        notion_workspace_id: data.workspace_id,
-        notion_access_token: data.access_token,
+        notion_workspace_id: notionData.workspace_id,
+        notion_access_token: notionData.access_token,
         updated_at: new Date().toISOString(),
       })
       .eq('id', user.id);
 
     if (updateError) {
-      console.error('Profile update error:', updateError);
+      console.error('[server] Profile update error:', updateError);
       return createErrorResponse(500, 'Failed to update user profile');
     }
 
-    console.log('Profile updated successfully');
+    console.log('[server] Profile updated successfully');
 
     // Redirect back to the frontend with success parameter
     return new Response(null, {
@@ -191,8 +94,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in notion-oauth function:', error);
-    // Redirect back to the frontend with error parameter
+    console.error('[server] Error in notion-oauth function:', error);
     return new Response(null, {
       status: 302,
       headers: {
