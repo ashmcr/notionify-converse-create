@@ -9,7 +9,9 @@ const FRONTEND_URL = 'https://notionify-converse-create.vercel.app';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Max-Age': '86400',
 };
 
 console.log('Edge function loaded with configuration');
@@ -20,9 +22,12 @@ serve(async (req) => {
     url: req.url,
   });
 
-  // Handle CORS preflight request
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      status: 204, 
+      headers: corsHeaders 
+    });
   }
 
   try {
@@ -109,6 +114,7 @@ serve(async (req) => {
     return new Response(null, {
       status: 302,
       headers: {
+        ...corsHeaders,
         'Location': `${FRONTEND_URL}/settings?success=true`,
       },
     });
@@ -119,6 +125,7 @@ serve(async (req) => {
     return new Response(null, {
       status: 302,
       headers: {
+        ...corsHeaders,
         'Location': `${FRONTEND_URL}/settings?error=${encodeURIComponent(error.message)}`,
       },
     });
