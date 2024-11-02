@@ -47,7 +47,7 @@ async function createTemplateInNotion(spec: TemplateSpec) {
             name: spec.category || "Custom"
           }
         },
-        "Status": {
+        "status": { // Changed from "Status" to "status"
           select: { 
             name: "Draft"
           }
@@ -101,7 +101,7 @@ async function createTemplateInNotion(spec: TemplateSpec) {
     const publicPage = await notion.pages.update({
       page_id: templatePage.id,
       properties: {
-        "Status": {
+        "status": { // Changed from "Status" to "status"
           select: { 
             name: "Published"
           }
