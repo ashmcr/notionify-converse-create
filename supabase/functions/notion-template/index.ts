@@ -12,6 +12,8 @@ interface TemplateSpec {
   blocks: any[];
   database_properties?: Record<string, any>;
   sample_data?: any[];
+  user_id: string;
+  category?: string;
 }
 
 async function createTemplateInNotion(spec: TemplateSpec) {
@@ -34,14 +36,27 @@ async function createTemplateInNotion(spec: TemplateSpec) {
         database_id: templateDbId
       },
       properties: {
-        Name: {
+        "Title": {
           title: [{ text: { content: spec.template_name } }]
         },
-        Description: {
+        "Description": {
           rich_text: [{ text: { content: spec.description } }]
         },
-        Status: {
-          select: { name: 'draft' }
+        "Category": {
+          select: { 
+            name: spec.category || "Custom"
+          }
+        },
+        "Status": {
+          select: { 
+            name: "Draft"
+          }
+        },
+        "CreatedBy": {
+          rich_text: [{ text: { content: spec.user_id } }]
+        },
+        "CloneCount": {
+          number: 0
         }
       }
     });
@@ -82,14 +97,17 @@ async function createTemplateInNotion(spec: TemplateSpec) {
 
     // Make template public and update status
     console.log('[notion] Publishing template');
+    const publicUrl = `https://notion.so/${templatePage.id}`;
     const publicPage = await notion.pages.update({
       page_id: templatePage.id,
       properties: {
-        Status: {
-          select: { name: 'published' }
+        "Status": {
+          select: { 
+            name: "Published"
+          }
         },
-        PublicURL: {
-          url: `https://notion.so/${templatePage.id}`
+        "PublicURL": {
+          url: publicUrl
         }
       }
     });
@@ -99,7 +117,7 @@ async function createTemplateInNotion(spec: TemplateSpec) {
     return {
       success: true,
       templateId: templatePage.id,
-      publicUrl: `https://notion.so/${templatePage.id}`
+      publicUrl
     };
   } catch (error) {
     console.error('[notion] Template creation failed:', error);
@@ -117,7 +135,7 @@ serve(async (req) => {
     const { templateSpec } = await req.json();
     
     // Validate required fields
-    if (!templateSpec || !templateSpec.template_name || !templateSpec.description || !templateSpec.blocks) {
+    if (!templateSpec || !templateSpec.template_name || !templateSpec.description || !templateSpec.blocks || !templateSpec.user_id) {
       return new Response(
         JSON.stringify({
           success: false,
