@@ -98,6 +98,42 @@ export function TemplateChatInterface() {
     });
   };
 
+  const handleTemplateCreation = async (templateSpec: string) => {
+    try {
+      const response = await supabase.functions.invoke('notion-template', {
+        body: { templateSpec }
+      });
+
+      if (response.error) throw response.error;
+      const data = response.data;
+
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: "Template created! Click to view.",
+          action: (
+            <ToastAction 
+              altText="View template"
+              onClick={() => window.open(data.url, '_blank')}
+            >
+              Open Template
+            </ToastAction>
+          )
+        });
+      } else {
+        throw new Error(data.error?.message || 'Failed to create template');
+      }
+
+    } catch (error: any) {
+      console.error('Template creation error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create template",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleUserMessage = async (userInput: string) => {
     if (!session?.user?.id) {
       handleError({ code: 'UNAUTHORIZED', message: ERROR_MESSAGES.UNAUTHORIZED });
