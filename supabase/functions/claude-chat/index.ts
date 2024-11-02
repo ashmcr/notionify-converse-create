@@ -6,60 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const SYSTEM_PROMPT = `You are a technical Notion template architect. Your role is to provide specific, technical instructions for creating Notion databases with detailed property configurations and view setups. 
+const SYSTEM_PROMPT = `// ... keep existing code`
 
-When analyzing user requests, always respond with a structured template specification in this format:
-
-1. Database Properties (provide exact technical specifications):
-{
-  "properties": {
-    "Name": { "type": "title" },
-    // List all properties with exact Notion API specifications
-    // Include property configurations, options, and validations
-  }
-}
-
-2. View Configurations (specify all views with settings):
-{
-  "views": [
-    {
-      "type": "table|board|calendar|etc",
-      "name": "View Name",
-      "filter": {}, // Include filter specifications
-      "sort": {},   // Include sort specifications
-      // Include all view-specific settings
-    }
-  ]
-}
-
-3. Automation Suggestions:
-- List specific Notion formulas
-- Provide relation configurations
-- Suggest rollup calculations
-
-4. Template Structure:
-- Provide exact property types and options
-- Include sample data format
-- Specify relation and rollup configurations
-
-Example response format:
-{
-  "template": {
-    "name": "Template Name",
-    "properties": {
-      // Exact Notion API property configurations
-    },
-    "views": [
-      // Exact view configurations
-    ],
-    "automations": [
-      // Formula and relation specifications
-    ],
-    "sample_data": [
-      // Example entries in correct format
-    ]
-  }
-}`
+const REFINEMENT_PROMPTS = {
+  properties: `Based on the template specification provided, suggest additional properties that would enhance the functionality. Include exact Notion API configurations for each suggestion.`,
+  
+  views: `Analyze the current view configurations and recommend additional views that would improve data visualization and workflow. Provide complete view specifications.`,
+  
+  automations: `Review the template structure and suggest advanced automations using Notion formulas, relations, and rollups. Include exact formula syntax and configuration details.`,
+  
+  optimization: `Evaluate the current template specification and suggest optimizations for performance and usability. Include specific technical improvements.`
+};
 
 function validateTemplateSpec(content: string): boolean {
   try {
@@ -81,11 +38,22 @@ serve(async (req) => {
   try {
     const anthropic = new Anthropic({
       apiKey: Deno.env.get('ANTHROPIC_API_KEY'),
-    })
+    });
 
-    const { messages } = await req.json()
+    const { messages, refinementType } = await req.json()
+    
+    console.log('Processing template chat request:', { messages, refinementType })
 
-    console.log('Processing template chat request:', messages)
+    // If refinementType is provided, append the appropriate refinement prompt
+    const finalMessages = refinementType 
+      ? [
+          ...messages,
+          {
+            role: 'user',
+            content: REFINEMENT_PROMPTS[refinementType as keyof typeof REFINEMENT_PROMPTS]
+          }
+        ]
+      : messages;
 
     const response = await anthropic.messages.create({
       model: 'claude-3-sonnet-20240229',
@@ -96,9 +64,9 @@ serve(async (req) => {
           role: 'system',
           content: SYSTEM_PROMPT
         },
-        ...messages.map(msg => ({
+        ...finalMessages.map(msg => ({
           role: msg.role,
-          content: `${msg.role === 'user' ? 'Create a Notion template for: ' : ''}${msg.content}`
+          content: `${msg.role === 'user' && !refinementType ? 'Create a Notion template for: ' : ''}${msg.content}`
         }))
       ]
     })
