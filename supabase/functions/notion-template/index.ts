@@ -6,15 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface TemplateData {
-  name: string;
+interface TemplateSpec {
+  template_name: string;
   description: string;
-  category: string;
   blocks: any[];
+  database_properties?: Record<string, any>;
+  sample_data?: any[];
 }
 
-async function createTemplateInWorkspace(templateData: TemplateData, userId: string) {
-  console.log('[notion] Creating template:', templateData.name);
+async function createTemplateInNotion(spec: TemplateSpec) {
+  console.log('[notion] Creating template:', spec.template_name);
   
   const notion = new Client({ 
     auth: Deno.env.get('NOTION_ADMIN_TOKEN')
@@ -33,22 +34,13 @@ async function createTemplateInWorkspace(templateData: TemplateData, userId: str
       },
       properties: {
         Name: {
-          title: [{ text: { content: templateData.name } }]
+          title: [{ text: { content: spec.template_name } }]
         },
         Description: {
-          rich_text: [{ text: { content: templateData.description } }]
-        },
-        Category: {
-          select: { name: templateData.category }
+          rich_text: [{ text: { content: spec.description } }]
         },
         Status: {
           select: { name: 'draft' }
-        },
-        CreatedBy: {
-          rich_text: [{ text: { content: userId } }]
-        },
-        DateCreated: {
-          date: { start: new Date().toISOString() }
         }
       }
     });
@@ -58,10 +50,32 @@ async function createTemplateInWorkspace(templateData: TemplateData, userId: str
     // Add template content
     await notion.blocks.children.append({
       block_id: templatePage.id,
-      children: templateData.blocks
+      children: spec.blocks
     });
 
     console.log('[notion] Added template content');
+
+    // If template includes a database, create it
+    if (spec.database_properties) {
+      const database = await notion.databases.create({
+        parent: { page_id: templatePage.id },
+        title: [{ text: { content: `${spec.template_name} Database` } }],
+        properties: spec.database_properties
+      });
+
+      console.log('[notion] Created inner database:', database.id);
+
+      // Add sample data if provided
+      if (spec.sample_data) {
+        for (const item of spec.sample_data) {
+          await notion.pages.create({
+            parent: { database_id: database.id },
+            properties: item
+          });
+        }
+        console.log('[notion] Added sample data');
+      }
+    }
 
     // Make template public
     const publicPage = await notion.pages.update({
@@ -72,9 +86,6 @@ async function createTemplateInWorkspace(templateData: TemplateData, userId: str
         },
         PublicURL: {
           url: `https://notion.so/${templatePage.id}`
-        },
-        LastModified: {
-          date: { start: new Date().toISOString() }
         }
       }
     });
@@ -103,14 +114,19 @@ serve(async (req) => {
       throw new Error('Missing authorization header');
     }
 
-    // Get request data
-    const { templateData } = await req.json();
-    if (!templateData) {
-      throw new Error('Missing template data');
+    // Get template specification from request
+    const { templateSpec } = await req.json();
+    if (!templateSpec) {
+      throw new Error('Missing template specification');
     }
 
-    // Create template
-    const result = await createTemplateInWorkspace(templateData, authHeader);
+    // Validate template specification
+    if (!templateSpec.template_name || !templateSpec.description) {
+      throw new Error('Missing required fields in template specification');
+    }
+
+    // Create template in Notion
+    const result = await createTemplateInNotion(templateSpec);
 
     return new Response(
       JSON.stringify(result),
