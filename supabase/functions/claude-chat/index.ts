@@ -19,19 +19,16 @@ serve(async (req) => {
     
     console.log('Processing template chat request:', { messages });
 
-    // Validate incoming messages
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       throw new Error('Invalid messages array');
     }
 
     const validatedMessages = validateMessages(messages);
 
-    // Initialize Anthropic client
     const anthropic = new Anthropic({
       apiKey: Deno.env.get('ANTHROPIC_API_KEY') || '',
     });
 
-    // Get template specification from Claude
     const claudeResponse = await anthropic.messages.create({
       model: 'claude-3-sonnet-20240229',
       messages: validatedMessages.map(msg => ({
@@ -43,7 +40,6 @@ serve(async (req) => {
       system: SYSTEM_PROMPT,
     });
 
-    // Validate Claude's response
     if (!claudeResponse || !claudeResponse.content || claudeResponse.content.length === 0) {
       console.error('Empty response from Claude:', claudeResponse);
       return new Response(
@@ -63,7 +59,6 @@ serve(async (req) => {
       );
     }
 
-    // Get the text content
     const responseContent = claudeResponse.content[0]?.text;
     
     if (!responseContent) {
@@ -85,7 +80,6 @@ serve(async (req) => {
       );
     }
 
-    // Extract and validate JSON from the response
     const templateSpec = extractJsonFromResponse(responseContent);
     
     if (!templateSpec) {
@@ -140,21 +134,29 @@ serve(async (req) => {
 
 function extractJsonFromResponse(response: string): any {
   try {
-    // First try to find JSON in code blocks
-    const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[1]);
-      if (validateTemplateSpec(parsed)) {
-        return parsed;
+    // First try to parse the entire response as JSON
+    try {
+      return JSON.parse(response);
+    } catch {
+      // If that fails, try to extract JSON from code blocks
+      const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        const jsonContent = jsonMatch[1].trim();
+        const parsed = JSON.parse(jsonContent);
+        if (validateTemplateSpec(parsed)) {
+          return parsed;
+        }
+      }
+
+      // If no valid JSON in code blocks, try to find JSON object in the text
+      const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonObjectMatch) {
+        const parsed = JSON.parse(jsonObjectMatch[0]);
+        if (validateTemplateSpec(parsed)) {
+          return parsed;
+        }
       }
     }
-
-    // If no valid JSON in code blocks, try to parse the entire response
-    const parsed = JSON.parse(response);
-    if (validateTemplateSpec(parsed)) {
-      return parsed;
-    }
-
     return null;
   } catch (error) {
     console.error('JSON parsing error:', error);
@@ -165,13 +167,13 @@ function extractJsonFromResponse(response: string): any {
 function validateTemplateSpec(spec: any): boolean {
   if (!spec || typeof spec !== 'object') return false;
 
-  const requiredFields = ['template_name', 'description', 'blocks', 'database_properties'];
+  const requiredFields = ['template_name', 'description', 'blocks', 'databases'];
   for (const field of requiredFields) {
     if (!spec[field]) return false;
   }
 
   if (!Array.isArray(spec.blocks)) return false;
-  if (typeof spec.database_properties !== 'object') return false;
+  if (!Array.isArray(spec.databases)) return false;
 
   return true;
 }
