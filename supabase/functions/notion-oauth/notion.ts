@@ -1,9 +1,4 @@
 import { Client } from "https://deno.land/x/notion_sdk/src/mod.ts";
-import { corsHeaders } from "./utils.ts";
-
-const NOTION_CLIENT_ID = Deno.env.get('NOTION_CLIENT_ID')!;
-const NOTION_CLIENT_SECRET = Deno.env.get('NOTION_CLIENT_SECRET')!;
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 
 export const exchangeCodeForToken = async (code: string) => {
   console.log('[notion] Exchanging code for access token');
@@ -12,14 +7,14 @@ export const exchangeCodeForToken = async (code: string) => {
     const response = await fetch('https://api.notion.com/v1/oauth/token', {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${btoa(`${NOTION_CLIENT_ID}:${NOTION_CLIENT_SECRET}`)}`,
+        'Authorization': `Basic ${btoa(`${Deno.env.get('NOTION_CLIENT_ID')}:${Deno.env.get('NOTION_CLIENT_SECRET')}`)}`,
         'Content-Type': 'application/json',
         'Notion-Version': '2022-06-28',
       },
       body: JSON.stringify({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: `${SUPABASE_URL}/functions/v1/notion-oauth`,
+        redirect_uri: `${Deno.env.get('SUPABASE_URL')}/functions/v1/notion-oauth`,
       }),
     });
 
@@ -38,12 +33,37 @@ export const exchangeCodeForToken = async (code: string) => {
   }
 };
 
+interface NotionResponse {
+  id: string;
+  url: string;
+  parent: {
+    type: string;
+    workspace?: boolean;
+    page_id?: string;
+  };
+}
+
+function validateDatabaseResponse(response: NotionResponse): void {
+  if (!response?.id) {
+    throw new Error('Invalid database response: missing id');
+  }
+  if (!response?.parent?.type) {
+    throw new Error('Invalid database response: missing parent type');
+  }
+}
+
 export const findOrCreateTemplateDatabase = async (accessToken: string) => {
-  console.log('[notion] Searching for or creating template database');
-  const notion = new Client({ auth: accessToken });
+  console.log('[notion] Initializing template database setup');
+  const notion = new Client({ 
+    auth: accessToken,
+    logLevel: 'debug'
+  });
+
+  const startTime = Date.now();
 
   try {
     // First try to find existing database
+    console.log('[notion] Searching for existing template database...');
     const response = await notion.search({
       query: "NotionGPT Template Library",
       sort: {
@@ -56,14 +76,16 @@ export const findOrCreateTemplateDatabase = async (accessToken: string) => {
       }
     });
 
-    console.log('[notion] Search results:', JSON.stringify(response.results.length));
+    console.log('[notion] Search completed in', Date.now() - startTime, 'ms');
+    console.log('[notion] Found', response.results.length, 'matching databases');
 
     if (response.results.length > 0) {
       const templateDb = response.results[0];
-      console.log('[notion] Found existing template database:', templateDb.id);
+      console.log('[notion] Using existing database:', templateDb.id);
       
       // Verify permissions
       await notion.databases.retrieve({ database_id: templateDb.id });
+      validateDatabaseResponse(templateDb as NotionResponse);
       
       return {
         databaseId: templateDb.id,
@@ -71,8 +93,8 @@ export const findOrCreateTemplateDatabase = async (accessToken: string) => {
       };
     }
 
-    // If no database found, create one
-    console.log('[notion] Creating new template database');
+    // Create new database in workspace root
+    console.log('[notion] Creating new template database in workspace root');
     const newDb = await notion.databases.create({
       parent: { type: "workspace", workspace: true },
       title: [{ type: "text", text: { content: "NotionGPT Template Library" } }],
@@ -83,7 +105,7 @@ export const findOrCreateTemplateDatabase = async (accessToken: string) => {
             options: [
               { name: "Project Management", color: "blue" },
               { name: "Personal Organization", color: "green" },
-              { name: "Content Management", color: "orange" },
+              { name: "Content Planning", color: "purple" },
               { name: "Custom", color: "default" },
             ]
           }
@@ -93,9 +115,9 @@ export const findOrCreateTemplateDatabase = async (accessToken: string) => {
         Status: {
           select: {
             options: [
-              { name: "Ready to Use", color: "green" },
-              { name: "Example", color: "blue" },
-              { name: "Custom", color: "default" },
+              { name: "Draft", color: "gray" },
+              { name: "Active", color: "green" },
+              { name: "Archived", color: "red" },
             ]
           }
         },
@@ -114,14 +136,21 @@ export const findOrCreateTemplateDatabase = async (accessToken: string) => {
       },
     });
 
-    console.log('[notion] Created new template database:', newDb.id);
+    console.log('[notion] Database creation completed in', Date.now() - startTime, 'ms');
+    validateDatabaseResponse(newDb as NotionResponse);
     
     return {
       databaseId: newDb.id,
       parentPageId: newDb.parent.type === 'page_id' ? newDb.parent.page_id : null,
     };
   } catch (error) {
-    console.error('[notion] Error in findOrCreateTemplateDatabase:', error);
+    console.error('[notion] Error in template database setup:', {
+      name: error.name,
+      message: error.message,
+      code: error?.code,
+      status: error?.status,
+      body: error?.body
+    });
     throw error;
   }
 };

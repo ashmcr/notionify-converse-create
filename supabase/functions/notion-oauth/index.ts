@@ -73,7 +73,7 @@ serve(async (req) => {
 
     console.log('[server] OAuth flow completed successfully');
 
-    // Redirect back to the frontend
+    // Redirect back to the frontend with success status
     return new Response(null, {
       status: 302,
       headers: {
@@ -83,7 +83,14 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('[server] Error in notion-oauth function:', error);
+    console.error('[server] Error in notion-oauth function:', {
+      name: error.name,
+      message: error.message,
+      code: error?.code,
+      status: error?.status,
+      body: error?.body
+    });
+    
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     
     return new Response(null, {
