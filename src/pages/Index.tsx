@@ -1,5 +1,5 @@
 import { MainLayout } from "@/components/layout/MainLayout";
-import { ChatInterface } from "@/components/chat/ChatInterface";
+import { TemplateChatInterface } from "@/components/chat/TemplateChatInterface";
 import { TemplatePreview } from "@/components/preview/TemplatePreview";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
@@ -11,7 +11,7 @@ export default function Index() {
         className="min-h-[calc(100vh-5rem)]"
       >
         <ResizablePanel defaultSize={60}>
-          <ChatInterface />
+          <TemplateChatInterface />
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={40}>
