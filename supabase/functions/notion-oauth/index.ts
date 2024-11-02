@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
+import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts";
 
 const NOTION_CLIENT_ID = Deno.env.get('NOTION_CLIENT_ID')!;
 const NOTION_CLIENT_SECRET = Deno.env.get('NOTION_CLIENT_SECRET')!;
@@ -14,12 +15,45 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-console.log('Edge function loaded with configuration');
+const createErrorResponse = (status: number, message: string, details?: any) => {
+  console.error(`Error: ${message}`, details);
+  return new Response(
+    JSON.stringify({
+      error: {
+        message,
+        details,
+        status,
+      }
+    }),
+    {
+      status,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+      }
+    }
+  );
+};
+
+async function verifyJWT(token: string) {
+  try {
+    const jwt = token.replace('Bearer ', '');
+    const { payload } = await jose.jwtVerify(
+      jwt,
+      new TextEncoder().encode(Deno.env.get('SUPABASE_JWT_SECRET'))
+    );
+    return payload;
+  } catch (error) {
+    console.error('JWT verification failed:', error);
+    return null;
+  }
+}
 
 serve(async (req) => {
   console.log('Received request:', {
     method: req.method,
     url: req.url,
+    headers: Object.fromEntries(req.headers.entries()),
   });
 
   // Handle CORS preflight requests
@@ -41,41 +75,67 @@ serve(async (req) => {
     });
 
     if (!code) {
-      throw new Error('No authorization code provided');
+      return createErrorResponse(400, 'No authorization code provided');
     }
 
     if (!state) {
-      throw new Error('No state token provided');
+      return createErrorResponse(400, 'No state token provided');
+    }
+
+    // Verify JWT from state parameter
+    const payload = await verifyJWT(state);
+    if (!payload) {
+      return createErrorResponse(401, 'Invalid or expired state token');
     }
 
     // Initialize Supabase client
     console.log('Initializing Supabase client');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Exchange the authorization code for an access token
+    // Exchange the authorization code for an access token with retry logic
     console.log('Exchanging code for Notion access token');
-    const notionResponse = await fetch('https://api.notion.com/v1/oauth/token', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(`${NOTION_CLIENT_ID}:${NOTION_CLIENT_SECRET}`)}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: `${SUPABASE_URL}/functions/v1/notion-oauth`,
-      }),
-    });
+    let notionResponse;
+    let retryCount = 0;
+    const maxRetries = 3;
 
-    console.log('Notion API response status:', notionResponse.status);
-    const responseText = await notionResponse.text();
-    console.log('Notion API response body:', responseText);
+    while (retryCount < maxRetries) {
+      try {
+        notionResponse = await fetch('https://api.notion.com/v1/oauth/token', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${btoa(`${NOTION_CLIENT_ID}:${NOTION_CLIENT_SECRET}`)}`,
+            'Content-Type': 'application/json',
+            'Notion-Version': '2022-06-28',
+          },
+          body: JSON.stringify({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: `${SUPABASE_URL}/functions/v1/notion-oauth`,
+          }),
+        });
 
-    if (!notionResponse.ok) {
-      throw new Error(`Notion API error: ${responseText}`);
+        if (notionResponse.ok) break;
+
+        if (notionResponse.status === 429) {
+          const retryAfter = notionResponse.headers.get('Retry-After') || '5';
+          await new Promise(resolve => setTimeout(resolve, parseInt(retryAfter) * 1000));
+        } else if (!notionResponse.ok) {
+          throw new Error(`Notion API error: ${await notionResponse.text()}`);
+        }
+
+        retryCount++;
+      } catch (error) {
+        console.error(`Attempt ${retryCount + 1} failed:`, error);
+        if (retryCount === maxRetries - 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+      }
     }
 
-    const data = JSON.parse(responseText);
+    if (!notionResponse?.ok) {
+      return createErrorResponse(notionResponse?.status || 500, 'Failed to exchange code for access token');
+    }
+
+    const data = await notionResponse.json();
     console.log('Notion OAuth successful:', {
       workspace_id: data.workspace_id,
       workspace_name: data.workspace_name,
@@ -87,7 +147,7 @@ serve(async (req) => {
     
     if (authError || !user) {
       console.error('Auth error:', authError);
-      throw new Error('Invalid session');
+      return createErrorResponse(401, 'Invalid session');
     }
 
     console.log('User authenticated:', user.id);
@@ -105,7 +165,7 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('Profile update error:', updateError);
-      throw new Error('Failed to update user profile');
+      return createErrorResponse(500, 'Failed to update user profile');
     }
 
     console.log('Profile updated successfully');

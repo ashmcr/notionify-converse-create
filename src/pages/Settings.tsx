@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { TemplateDbInitDialog } from "@/components/notion/TemplateDbInitDialog";
 import { NotionIntegrationCard } from "@/components/settings/NotionIntegrationCard";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const NOTION_CLIENT_ID = import.meta.env.VITE_NOTION_CLIENT_ID;
 const NOTION_REDIRECT_URI = import.meta.env.VITE_NOTION_REDIRECT_URI;
@@ -19,6 +20,7 @@ export default function Settings() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [showInitDialog, setShowInitDialog] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) {
@@ -40,6 +42,7 @@ export default function Settings() {
       });
       fetchProfile();
     } else if (error) {
+      setError(decodeURIComponent(error));
       toast({
         title: "Error",
         description: decodeURIComponent(error),
@@ -56,6 +59,7 @@ export default function Settings() {
     
     try {
       setIsLoading(true);
+      setError(null);
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select('*')
@@ -70,6 +74,7 @@ export default function Settings() {
 
       setProfile(profiles[0]);
     } catch (error: any) {
+      setError(error.message);
       toast({
         title: "Error fetching profile",
         description: error.message,
@@ -81,40 +86,51 @@ export default function Settings() {
   };
 
   const handleNotionConnect = async () => {
-    if (!NOTION_CLIENT_ID) {
+    try {
+      setIsConnecting(true);
+      setError(null);
+
+      if (!NOTION_CLIENT_ID) {
+        throw new Error('Notion Client ID is not configured');
+      }
+
+      if (!session?.access_token) {
+        throw new Error('No valid session found');
+      }
+
+      const scopes = [
+        'workspace.content',
+        'workspace.name',
+        'page.read',
+        'page.write',
+      ].join(',');
+
+      const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&redirect_uri=${NOTION_REDIRECT_URI}&response_type=code&owner=user&scope=${scopes}&state=${session.access_token}`;
+      console.log('Redirecting to Notion auth URL:', authUrl);
+      window.location.href = authUrl;
+    } catch (error: any) {
+      setError(error.message);
       toast({
-        title: "Configuration Error",
-        description: "Notion Client ID is not configured",
+        title: "Error",
+        description: error.message,
         variant: "destructive",
       });
-      return;
+    } finally {
+      setIsConnecting(false);
     }
-
-    if (!session?.access_token) {
-      toast({
-        title: "Authentication Error",
-        description: "No valid session found",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const scopes = [
-      'workspace.content',
-      'workspace.name',
-      'page.read',
-      'page.write',
-    ].join(',');
-
-    const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&redirect_uri=${NOTION_REDIRECT_URI}&response_type=code&owner=user&scope=${scopes}&state=${session.access_token}`;
-    console.log('Redirecting to Notion auth URL:', authUrl);
-    window.location.href = authUrl;
   };
 
   return (
     <MainLayout>
       <div className="container max-w-4xl py-8">
         <h1 className="text-3xl font-bold mb-8">Settings</h1>
+        
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         
         {isLoading ? (
           <div className="flex items-center justify-center p-8">
