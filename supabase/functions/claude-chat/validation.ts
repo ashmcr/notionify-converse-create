@@ -5,7 +5,7 @@ const VALID_PROPERTY_TYPES = [
   'multi_select', 'date', 'formula', 'relation',
   'rollup', 'files', 'checkbox', 'url', 'email',
   'phone_number', 'created_time', 'created_by',
-  'last_edited_time', 'last_edited_by'
+  'last_edited_time', 'last_edited_by', 'text'
 ];
 
 export function validateMessages(messages: any[]): Message[] {
@@ -45,6 +45,12 @@ export function validateTemplateSpec(spec: any): boolean {
     }
 
     const typedProp = prop as { type: string };
+    
+    // Convert 'text' type to 'rich_text' for Notion API compatibility
+    if (typedProp.type === 'text') {
+      typedProp.type = 'rich_text';
+    }
+    
     if (!typedProp.type || !VALID_PROPERTY_TYPES.includes(typedProp.type)) {
       throw new Error(`Invalid property type for "${key}": ${typedProp.type}`);
     }
