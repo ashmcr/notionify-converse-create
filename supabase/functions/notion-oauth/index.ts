@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { verifyJWT } from "./auth.ts";
-import { exchangeCodeForToken, findTemplateDatabase } from "./notion.ts";
+import { exchangeCodeForToken, findOrCreateTemplateDatabase } from "./notion.ts";
 import { updateUserProfile } from "./database.ts";
 import { corsHeaders, createErrorResponse } from "./utils.ts";
 
@@ -58,40 +58,27 @@ serve(async (req) => {
       return createErrorResponse(500, 'Failed to exchange code for access token');
     }
 
-    // Find template database and validate permissions
-    console.log('[server] Looking for template database...');
-    let templateInfo = null;
-    try {
-      templateInfo = await findTemplateDatabase(notionData.access_token);
-    } catch (error) {
-      console.log('[server] Template database not found or inaccessible:', error);
-      // Continue without template info - user might not have created it yet
-    }
+    // Find or create template database
+    console.log('[server] Setting up template database...');
+    const templateInfo = await findOrCreateTemplateDatabase(notionData.access_token);
 
     // Update user profile with Notion credentials and template info
     console.log('[server] Updating user profile...');
     await updateUserProfile(userId, {
       accessToken: notionData.access_token,
       workspaceId: notionData.workspace_id,
-      templateDbId: templateInfo?.databaseId,
-      defaultPageId: templateInfo?.parentPageId,
+      templateDbId: templateInfo.databaseId,
+      defaultPageId: templateInfo.parentPageId,
     });
 
     console.log('[server] OAuth flow completed successfully');
 
     // Redirect back to the frontend
-    const redirectUrl = new URL('/settings', FRONTEND_URL);
-    redirectUrl.searchParams.set('success', 'true');
-    
-    if (!templateInfo) {
-      redirectUrl.searchParams.set('warning', 'template-not-found');
-    }
-
     return new Response(null, {
       status: 302,
       headers: {
         ...corsHeaders,
-        'Location': redirectUrl.toString(),
+        'Location': `${FRONTEND_URL}/settings?success=true`,
       },
     });
 
@@ -99,14 +86,11 @@ serve(async (req) => {
     console.error('[server] Error in notion-oauth function:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     
-    const redirectUrl = new URL('/settings', FRONTEND_URL);
-    redirectUrl.searchParams.set('error', encodeURIComponent(errorMessage));
-    
     return new Response(null, {
       status: 302,
       headers: {
         ...corsHeaders,
-        'Location': redirectUrl.toString(),
+        'Location': `${FRONTEND_URL}/settings?error=${encodeURIComponent(errorMessage)}`,
       },
     });
   }

@@ -38,11 +38,12 @@ export const exchangeCodeForToken = async (code: string) => {
   }
 };
 
-export const findTemplateDatabase = async (accessToken: string) => {
-  console.log('[notion] Searching for template database');
+export const findOrCreateTemplateDatabase = async (accessToken: string) => {
+  console.log('[notion] Searching for or creating template database');
   const notion = new Client({ auth: accessToken });
 
   try {
+    // First try to find existing database
     const response = await notion.search({
       query: "NotionGPT Template Library",
       sort: {
@@ -57,22 +58,70 @@ export const findTemplateDatabase = async (accessToken: string) => {
 
     console.log('[notion] Search results:', JSON.stringify(response.results.length));
 
-    if (!response.results.length) {
-      throw new Error('Template database not found');
+    if (response.results.length > 0) {
+      const templateDb = response.results[0];
+      console.log('[notion] Found existing template database:', templateDb.id);
+      
+      // Verify permissions
+      await notion.databases.retrieve({ database_id: templateDb.id });
+      
+      return {
+        databaseId: templateDb.id,
+        parentPageId: templateDb.parent.type === 'page_id' ? templateDb.parent.page_id : null,
+      };
     }
 
-    const templateDb = response.results[0];
-    console.log('[notion] Found template database:', templateDb.id);
+    // If no database found, create one
+    console.log('[notion] Creating new template database');
+    const newDb = await notion.databases.create({
+      parent: { type: "workspace", workspace: true },
+      title: [{ type: "text", text: { content: "NotionGPT Template Library" } }],
+      properties: {
+        Name: { title: {} },
+        Category: {
+          select: {
+            options: [
+              { name: "Project Management", color: "blue" },
+              { name: "Personal Organization", color: "green" },
+              { name: "Content Management", color: "orange" },
+              { name: "Custom", color: "default" },
+            ]
+          }
+        },
+        Description: { rich_text: {} },
+        Instructions: { rich_text: {} },
+        Status: {
+          select: {
+            options: [
+              { name: "Ready to Use", color: "green" },
+              { name: "Example", color: "blue" },
+              { name: "Custom", color: "default" },
+            ]
+          }
+        },
+        "Views Required": {
+          multi_select: {
+            options: [
+              { name: "Table", color: "blue" },
+              { name: "Calendar", color: "green" },
+              { name: "Board", color: "orange" },
+              { name: "Timeline", color: "red" },
+              { name: "Gallery", color: "purple" },
+            ]
+          }
+        },
+        Rating: { number: {} },
+      },
+    });
 
-    // Verify permissions by trying to retrieve the database
-    await notion.databases.retrieve({ database_id: templateDb.id });
-
+    console.log('[notion] Created new template database:', newDb.id);
+    
     return {
-      databaseId: templateDb.id,
-      parentPageId: templateDb.parent.type === 'page_id' ? templateDb.parent.page_id : null,
+      databaseId: newDb.id,
+      parentPageId: newDb.parent.type === 'page_id' ? newDb.parent.page_id : null,
     };
   } catch (error) {
-    console.error('[notion] Error finding template:', error);
+    console.error('[notion] Error in findOrCreateTemplateDatabase:', error);
     throw error;
   }
 };
