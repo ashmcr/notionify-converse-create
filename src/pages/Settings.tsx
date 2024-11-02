@@ -35,6 +35,7 @@ export default function Settings() {
     
     if (code) {
       console.log('Received Notion authorization code:', code);
+      console.log('Current session:', session);
       handleNotionCallback(code);
     } else if (error) {
       console.error('Notion authorization error:', error);
@@ -49,22 +50,28 @@ export default function Settings() {
   const handleNotionCallback = async (code: string) => {
     try {
       setIsConnecting(true);
-      console.log('Calling notion-oauth function with code...');
+      console.log('Starting Notion OAuth callback process...');
+      console.log('Session access token:', session?.access_token ? 'Present' : 'Missing');
       
-      const { data, error } = await supabase.functions.invoke('notion-oauth', {
+      if (!session?.access_token) {
+        throw new Error('No valid session token found');
+      }
+
+      console.log('Calling notion-oauth function with code...');
+      const functionResponse = await supabase.functions.invoke('notion-oauth', {
         body: { code },
         headers: {
-          Authorization: `Bearer ${session?.access_token}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
       });
 
-      console.log('Notion OAuth response:', { data, error });
+      console.log('Notion OAuth function response:', functionResponse);
 
-      if (error) {
-        throw new Error(error.message || 'Failed to connect to Notion');
+      if (functionResponse.error) {
+        throw new Error(functionResponse.error.message || 'Failed to connect to Notion');
       }
 
-      if (!data?.success) {
+      if (!functionResponse.data?.success) {
         throw new Error('Invalid response from Notion OAuth');
       }
 

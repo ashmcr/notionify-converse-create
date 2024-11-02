@@ -12,7 +12,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Edge function loaded and running');
+console.log('Edge function loaded with configuration:', {
+  hasNotionClientId: !!NOTION_CLIENT_ID,
+  hasNotionClientSecret: !!NOTION_CLIENT_SECRET,
+  hasSupabaseUrl: !!SUPABASE_URL,
+  hasSupabaseServiceRoleKey: !!SUPABASE_SERVICE_ROLE_KEY,
+  redirectUri: REDIRECT_URI,
+});
 
 serve(async (req) => {
   console.log('Received request:', {
@@ -29,9 +35,19 @@ serve(async (req) => {
 
   try {
     // Parse the request body
-    const requestData = await req.json();
+    const requestBody = await req.text();
+    console.log('Raw request body:', requestBody);
+    
+    let requestData;
+    try {
+      requestData = JSON.parse(requestBody);
+    } catch (e) {
+      console.error('Failed to parse request body:', e);
+      throw new Error('Invalid JSON in request body');
+    }
+    
     const { code } = requestData;
-    console.log('Received request data:', { code: code ? 'present' : 'missing' });
+    console.log('Parsed request data:', { code: code ? 'present' : 'missing' });
 
     if (!code) {
       throw new Error('No authorization code provided');
@@ -39,6 +55,8 @@ serve(async (req) => {
 
     // Get authorization header
     const authHeader = req.headers.get('authorization');
+    console.log('Authorization header:', authHeader ? 'present' : 'missing');
+    
     if (!authHeader) {
       throw new Error('No authorization header provided');
     }
@@ -52,9 +70,14 @@ serve(async (req) => {
     console.log('Getting user from session token');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
-    if (authError || !user) {
+    if (authError) {
       console.error('Auth error:', authError);
       throw new Error('Invalid session');
+    }
+
+    if (!user) {
+      console.error('No user found in session');
+      throw new Error('User not found');
     }
 
     console.log('User authenticated:', user.id);
@@ -113,7 +136,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in notion-oauth function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        success: false
+      }),
       { 
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
