@@ -14,11 +14,16 @@ interface NotionView {
   properties?: string[];
 }
 
-interface TemplateStructure {
+interface DatabaseProperty {
+  type: string;
+  [key: string]: any;
+}
+
+export interface TemplateStructure {
   template_name: string;
   description: string;
   blocks: any[];
-  database_properties: Record<string, any>;
+  database_properties: Record<string, DatabaseProperty>;
   sample_data?: any[];
 }
 
