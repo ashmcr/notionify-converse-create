@@ -68,6 +68,42 @@ export function TemplateChatInterface() {
     });
   };
 
+  const handleTemplateCreation = async (claudeResponse: string) => {
+    try {
+      const response = await supabase.functions.invoke('claude-chat', {
+        body: {
+          messages: [
+            { role: 'assistant', content: claudeResponse }
+          ]
+        }
+      });
+
+      if (response.error) throw response.error;
+      const data = response.data;
+
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: "Template created! Click to view.",
+          action: {
+            label: "Open Template",
+            onClick: () => window.open(data.url, '_blank')
+          }
+        });
+      } else {
+        throw new Error(data.error?.message || 'Failed to create template');
+      }
+
+    } catch (error: any) {
+      console.error('Template creation error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create template",
+        variant: "destructive"
+      });
+    }
+  };
+
   const validateUserInput = (input: string): boolean => {
     if (!input.trim()) {
       setError(ERROR_MESSAGES.VALIDATION_ERROR);
@@ -123,6 +159,8 @@ export function TemplateChatInterface() {
         setTemplateStructure(structure);
 
         if (structure.properties.length > 0 || structure.views.length > 0) {
+          await handleTemplateCreation(response.data.content[0].text);
+          
           const event = new CustomEvent('templateUpdate', { 
             detail: structure 
           });
