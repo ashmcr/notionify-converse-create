@@ -22,6 +22,13 @@ interface DatabaseProperty {
 export interface TemplateStructure {
   template_name: string;
   description: string;
+  page_icon?: string;
+  cover?: {
+    type: string;
+    external?: {
+      url: string;
+    };
+  };
   blocks: any[];
   database_properties: Record<string, DatabaseProperty>;
   sample_data?: any[];
@@ -49,6 +56,8 @@ export function processTemplateResponse(response: string): TemplateStructure {
     return {
       template_name: parsed.template_name,
       description: parsed.description,
+      page_icon: parsed.page_icon,
+      cover: parsed.cover,
       blocks: parsed.blocks,
       database_properties,
       sample_data: parsed.sample_data || []
@@ -59,10 +68,10 @@ export function processTemplateResponse(response: string): TemplateStructure {
   }
 }
 
-export function validateTemplateSpec(content: string): { isValid: boolean; error?: string; errorType?: string } {
+export function validateTemplateSpec(spec: any): { isValid: boolean; error?: string; errorType?: string } {
   try {
-    const spec = JSON.parse(content);
-    
+    if (!spec || typeof spec !== 'object') return false;
+
     if (!spec.template_name || !spec.description) {
       return { isValid: false, error: 'Missing template name or description' };
     }
