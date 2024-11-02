@@ -26,7 +26,7 @@ export default function Settings() {
     }
 
     fetchProfile();
-  }, [session, navigate]);
+  }, [session]);
 
   const fetchProfile = async () => {
     if (!session?.user?.id) return;
@@ -133,12 +133,9 @@ export default function Settings() {
 
     if (code) {
       handleNotionCallback(code);
-      // Use replace state to avoid issues with browser history
       window.history.replaceState({}, document.title, "/settings");
     }
   }, []);
-
-  if (!session) return null;
 
   return (
     <MainLayout>
