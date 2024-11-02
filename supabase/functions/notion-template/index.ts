@@ -21,27 +21,15 @@ async function createTemplateInNotion(spec: TemplateSpec) {
     auth: Deno.env.get('NOTION_ADMIN_TOKEN')
   });
 
-  const templateDbId = Deno.env.get('NOTION_TEMPLATE_DB_ID');
-  if (!templateDbId) {
-    throw new Error('Template database ID not configured');
-  }
-
   try {
-    // Create template in central database
+    // Create a new page in the workspace root
     const templatePage = await notion.pages.create({
       parent: {
-        database_id: templateDbId
+        type: 'workspace',
+        workspace: true
       },
       properties: {
-        Name: {
-          title: [{ text: { content: spec.template_name } }]
-        },
-        Description: {
-          rich_text: [{ text: { content: spec.description } }]
-        },
-        Status: {
-          select: { name: 'draft' }
-        }
+        title: [{ text: { content: spec.template_name } }]
       }
     });
 
@@ -83,9 +71,6 @@ async function createTemplateInNotion(spec: TemplateSpec) {
       properties: {
         Status: {
           select: { name: 'published' }
-        },
-        PublicURL: {
-          url: `https://notion.so/${templatePage.id}`
         }
       }
     });
