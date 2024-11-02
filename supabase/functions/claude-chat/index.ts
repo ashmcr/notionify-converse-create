@@ -48,22 +48,23 @@ serve(async (req) => {
     const data = await response.json();
     console.log('Claude API response:', data);
 
-    // Extract the text content from the response
-    if (!data.content || !Array.isArray(data.content)) {
-      console.error('Invalid API response structure:', data);
-      throw new Error('Invalid API response structure');
+    // Validate the response structure
+    if (!data.content || !Array.isArray(data.content) || data.content.length === 0) {
+      console.error('Invalid or empty API response structure:', data);
+      throw new Error('Invalid or empty API response structure');
     }
 
-    const content = data.content[0]?.text;
-    if (!content) {
-      console.error('No content in response:', data);
-      throw new Error('No content in response');
+    // Get the first content item's text
+    const contentItem = data.content[0];
+    if (!contentItem || typeof contentItem.text !== 'string') {
+      console.error('Invalid content structure:', contentItem);
+      throw new Error('Invalid content structure in response');
     }
 
     // Try to extract JSON from the content using regex
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const jsonMatch = contentItem.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error('No JSON found in response:', content);
+      console.error('No JSON found in response:', contentItem.text);
       throw new Error('No valid JSON found in response');
     }
 
