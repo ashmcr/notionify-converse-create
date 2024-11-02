@@ -1,0 +1,26 @@
+{
+  "section_breaks": {
+    "before_major_section": [
+      {
+        "type": "divider"
+      },
+      {
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": []
+        }
+      }
+    ],
+    "after_major_section": [
+      {
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": []
+        }
+      },
+      {
+        "type": "divider"
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "template_header": {
+    "order": [
+      "page_icon",
+      "cover_image",
+      "welcome_callout",
+      "clone_instructions",
+      "quick_start_guide"
+    ],
+    "styling": {
+      "consistent_emoji_style": true,
+      "color_scheme_match": true
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "board_view": {
+    "types": {
+      "kanban": {
+        "group_by": "Status",
+        "card_size": "medium",
+        "card_preview": {
+          "show_cover": true,
+          "show_properties": ["Priority", "Due Date", "Assignee"],
+          "property_order": ["Status", "Priority", "Due Date"]
+        },
+        "board_groups": [
+          {
+            "name": "To Do",
+            "color": "red",
+            "properties_to_show": ["Due Date", "Priority"]
+          },
+          {
+            "name": "In Progress",
+            "color": "yellow",
+            "properties_to_show": ["Due Date", "Assignee"]
+          },
+          {
+            "name": "Done",
+            "color": "green",
+            "properties_to_show": ["Completed Date"]
+          }
+        ]
+      }
+    }
+  }
+}

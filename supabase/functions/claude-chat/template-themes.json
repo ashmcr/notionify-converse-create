@@ -1,0 +1,16 @@
+{
+  "project_management": {
+    "variations": [
+      {
+        "icon": "📊",
+        "cover": "blue_gradient",
+        "accent": "blue",
+        "supplementary_icons": {
+          "tasks": "✅",
+          "timeline": "📅",
+          "resources": "🎯"
+        }
+      }
+    ]
+  }
+}
