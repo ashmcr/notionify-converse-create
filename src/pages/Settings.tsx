@@ -31,6 +31,7 @@ export default function Settings() {
 
   const fetchProfile = async () => {
     try {
+      setIsLoading(true);
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -45,6 +46,8 @@ export default function Settings() {
         description: error.message,
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -76,7 +79,6 @@ export default function Settings() {
 
       const data = await response.json();
       
-      // Update profile with Notion workspace info
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
@@ -93,8 +95,6 @@ export default function Settings() {
       });
 
       await fetchProfile();
-      
-      // Show template database initialization dialog
       setShowInitDialog(true);
     } catch (error: any) {
       toast({
@@ -123,7 +123,6 @@ export default function Settings() {
 
     if (code) {
       handleNotionCallback(code);
-      // Clean up URL
       window.history.replaceState({}, document.title, "/settings");
     }
   }, []);
@@ -135,44 +134,50 @@ export default function Settings() {
       <div className="container max-w-4xl py-8">
         <h1 className="text-3xl font-bold mb-8">Settings</h1>
         
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Notion Integration</CardTitle>
-            <CardDescription>
-              Connect your Notion workspace to use templates and save content
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {profile?.notion_workspace_id ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Connected to Notion workspace
-                </p>
+        {isLoading ? (
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Notion Integration</CardTitle>
+              <CardDescription>
+                Connect your Notion workspace to use templates and save content
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {profile?.notion_workspace_id ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Connected to Notion workspace
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={handleNotionConnect}
+                    disabled={isLoading}
+                  >
+                    Reconnect Workspace
+                  </Button>
+                </div>
+              ) : (
                 <Button
-                  variant="outline"
                   onClick={handleNotionConnect}
                   disabled={isLoading}
                 >
-                  Reconnect Workspace
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    'Connect Notion Workspace'
+                  )}
                 </Button>
-              </div>
-            ) : (
-              <Button
-                onClick={handleNotionConnect}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  'Connect Notion Workspace'
-                )}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <TemplateDbInitDialog 
           open={showInitDialog} 
