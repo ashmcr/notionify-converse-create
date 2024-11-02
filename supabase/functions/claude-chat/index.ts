@@ -17,7 +17,17 @@ async function makeRequest(messages: any[], retryCount = 0) {
   }
 
   try {
-    console.log('Making request to Claude API with messages:', JSON.stringify(messages));
+    // Extract system message if present
+    const systemMessage = messages.find(msg => msg.role === 'system')?.content || '';
+    const userMessages = messages.filter(msg => msg.role !== 'system').map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+
+    console.log('Making request to Claude API with messages:', JSON.stringify({ 
+      system: systemMessage, 
+      messages: userMessages 
+    }));
     
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -28,7 +38,8 @@ async function makeRequest(messages: any[], retryCount = 0) {
       },
       body: JSON.stringify({
         model: 'claude-3-sonnet-20240229',
-        messages,
+        system: systemMessage,
+        messages: userMessages,
         max_tokens: 4096,
       }),
     });
