@@ -40,8 +40,11 @@ serve(async (req) => {
         model: 'claude-3-sonnet-20240229',
         max_tokens: 4096,
         temperature: 0.2,
-        system: SYSTEM_PROMPT,
-        messages: finalMessages
+        system: SYSTEM_PROMPT + "\nIMPORTANT: You must ALWAYS respond with valid JSON that matches the template specification format. Never include any natural language responses.",
+        messages: finalMessages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
       })
     });
 
@@ -51,20 +54,29 @@ serve(async (req) => {
     }
 
     const data = await response.json();
+    console.log('Claude API response:', data);
     
+    let templateSpec;
     try {
-      // Validate the template specification in the response
-      const templateSpec = JSON.parse(data.content[0].text);
+      // Extract the actual content from Claude's response
+      const content = data.content[0].text;
+      console.log('Attempting to parse content:', content);
+      
+      // Try to find JSON in the response if there's any surrounding text
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in response');
+      }
+      
+      templateSpec = JSON.parse(jsonMatch[0]);
       validateTemplateSpec(templateSpec);
     } catch (error) {
       console.error('Template validation error:', error);
-      // Continue with the response even if validation fails
+      throw new Error(`Invalid template format: ${error.message}`);
     }
 
-    console.log('Claude API response:', JSON.stringify(data));
-
     return new Response(
-      JSON.stringify(data),
+      JSON.stringify({ content: [{ text: JSON.stringify(templateSpec) }] }),
       { 
         headers: {
           ...corsHeaders,
