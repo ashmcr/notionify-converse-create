@@ -16,6 +16,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [showInitDialog, setShowInitDialog] = useState(false);
 
@@ -80,30 +81,24 @@ export default function Settings() {
   const handleNotionCallback = async (code: string) => {
     if (!session?.user?.id) return;
     
-    setIsLoading(true);
+    setIsConnecting(true);
     try {
-      const response = await fetch('/api/notion/oauth', {
+      const response = await fetch(`${window.location.origin}/functions/notion-oauth`, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ code }),
       });
 
-      if (!response.ok) throw new Error('Failed to connect Notion');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to connect Notion');
+      }
 
       const data = await response.json();
       
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          notion_workspace_id: data.workspace_id,
-          notion_access_token: data.access_token,
-        })
-        .eq('id', session.user.id);
-
-      if (updateError) throw updateError;
-
       toast({
         title: "Success",
         description: "Notion workspace connected successfully!",
@@ -112,13 +107,14 @@ export default function Settings() {
       await fetchProfile();
       setShowInitDialog(true);
     } catch (error: any) {
+      console.error('Notion connection error:', error);
       toast({
         title: "Error connecting Notion",
         description: error.message,
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsConnecting(false);
     }
   };
 
@@ -126,11 +122,17 @@ export default function Settings() {
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
     const error = url.searchParams.get('error');
+    const error_description = url.searchParams.get('error_description');
+
+    // Clean up URL parameters
+    if (code || error) {
+      window.history.replaceState({}, document.title, "/settings");
+    }
 
     if (error) {
       toast({
         title: "Notion Connection Error",
-        description: "Failed to connect Notion workspace",
+        description: error_description || "Failed to connect Notion workspace",
         variant: "destructive",
       });
       return;
@@ -138,7 +140,6 @@ export default function Settings() {
 
     if (code) {
       handleNotionCallback(code);
-      window.history.replaceState({}, document.title, "/settings");
     }
   }, []);
 
@@ -153,7 +154,7 @@ export default function Settings() {
           </div>
         ) : (
           <NotionIntegrationCard 
-            isLoading={isLoading}
+            isLoading={isConnecting}
             profile={profile}
             onConnect={handleNotionConnect}
           />
