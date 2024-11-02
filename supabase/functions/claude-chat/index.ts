@@ -39,13 +39,8 @@ serve(async (req) => {
         model: 'claude-3-sonnet-20240229',
         max_tokens: 4096,
         temperature: 0.2,
-        messages: [
-          {
-            role: 'system',
-            content: SYSTEM_PROMPT
-          },
-          ...finalMessages
-        ],
+        system: SYSTEM_PROMPT,
+        messages: finalMessages
       })
     });
 
