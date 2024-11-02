@@ -8,6 +8,8 @@ import { ChatInput } from "./ChatInput";
 import { processTemplateResponse } from "@/utils/templateProcessor";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ToastAction } from "@/components/ui/toast";
+import { TemplateStructureCheck } from "./TemplateStructureCheck";
+import { ChatError } from "./types";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -19,7 +21,7 @@ const INITIAL_MESSAGE: Message = {
   content: "Hi! I'm here to help you create a Notion template. To get started, could you tell me what kind of template you're looking for? For example, is it for project management, content planning, personal organization, or something else?"
 };
 
-const ERROR_MESSAGES = {
+const ERROR_MESSAGES: Record<string, string> = {
   RATE_LIMIT: "You've reached the rate limit. Please try again in a few minutes.",
   TOKEN_LIMIT: "The response was too long. Please try a simpler request.",
   SERVICE_UNAVAILABLE: "The service is temporarily unavailable. Please try again later.",
@@ -44,23 +46,12 @@ export function TemplateChatInterface() {
     }
   }, []);
 
-  const handleError = (error: any) => {
+  const handleError = (error: ChatError) => {
     console.error('Chat error:', error);
     setError(null);
 
-    if (error.status === 429) {
-      setError(ERROR_MESSAGES.RATE_LIMIT);
-    } else if (error.message?.includes('token')) {
-      setError(ERROR_MESSAGES.TOKEN_LIMIT);
-    } else if (error.message?.includes('unavailable')) {
-      setError(ERROR_MESSAGES.SERVICE_UNAVAILABLE);
-    } else if (error.message?.includes('structure')) {
-      setError(ERROR_MESSAGES.INVALID_STRUCTURE);
-    } else if (error.message?.includes('fields')) {
-      setError(ERROR_MESSAGES.MISSING_FIELDS);
-    } else {
-      setError(ERROR_MESSAGES.NETWORK_ERROR);
-    }
+    const errorMessage = ERROR_MESSAGES[error.code] || ERROR_MESSAGES.NETWORK_ERROR;
+    setError(errorMessage);
 
     toast({
       title: "Error",
@@ -109,14 +100,6 @@ export function TemplateChatInterface() {
     }
   };
 
-  const validateUserInput = (input: string): boolean => {
-    if (!input.trim()) {
-      setError(ERROR_MESSAGES.VALIDATION_ERROR);
-      return false;
-    }
-    return true;
-  };
-
   const handleUserMessage = async (userInput: string) => {
     if (!session?.user?.id) {
       setError(ERROR_MESSAGES.UNAUTHORIZED);
@@ -128,7 +111,8 @@ export function TemplateChatInterface() {
       return;
     }
 
-    if (!validateUserInput(userInput)) {
+    if (!userInput.trim()) {
+      setError(ERROR_MESSAGES.VALIDATION_ERROR);
       return;
     }
 
@@ -162,15 +146,6 @@ export function TemplateChatInterface() {
       try {
         const structure = processTemplateResponse(response.data.content[0].text);
         setTemplateStructure(structure);
-
-        if (structure.properties.length > 0 || structure.views.length > 0) {
-          await handleTemplateCreation(response.data.content[0].text);
-          
-          const event = new CustomEvent('templateUpdate', { 
-            detail: structure 
-          });
-          window.dispatchEvent(event);
-        }
       } catch (parseError) {
         console.error('Template parsing error:', parseError);
         setError(ERROR_MESSAGES.INVALID_STRUCTURE);
@@ -202,6 +177,13 @@ export function TemplateChatInterface() {
         
         {isLoading && <TypingIndicator />}
       </div>
+
+      {templateStructure && (
+        <TemplateStructureCheck 
+          structure={templateStructure}
+          onTemplateCreation={handleTemplateCreation}
+        />
+      )}
 
       <div className="border-t p-4">
         <ChatInput 
