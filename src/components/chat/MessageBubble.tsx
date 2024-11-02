@@ -1,19 +1,21 @@
 import { cn } from "@/lib/utils";
 
 interface MessageContent {
-  type?: string;
-  text?: string;
+  type: string;
+  text: string;
 }
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
-  content: string | MessageContent;
+  content: string | MessageContent | MessageContent[];
 }
 
 export function MessageBubble({ role, content }: MessageBubbleProps) {
-  // Handle both string and object content
+  // Handle different content formats
   const messageText = typeof content === 'string' 
     ? content 
+    : Array.isArray(content)
+    ? content.map(item => item.text).join('\n')
     : content.text || '';
 
   return (
