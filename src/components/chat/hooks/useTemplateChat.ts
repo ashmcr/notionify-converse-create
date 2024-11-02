@@ -4,6 +4,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Message, ChatError, ChatResponse, TemplateResponse } from "../types/chatTypes";
 import { processTemplateResponse } from "@/utils/templateProcessor";
+import { ToastTemplateAction } from "../ToastTemplateAction";
 
 const INITIAL_MESSAGE: Message = {
   role: 'assistant',
@@ -54,10 +55,7 @@ export function useTemplateChat() {
         toast({
           title: "Success",
           description: "Template created! Click to view.",
-          action: {
-            label: "Open Template",
-            onClick: () => window.open(data.url, '_blank')
-          }
+          action: <ToastTemplateAction url={data.url || ''} />
         });
       } else {
         throw new Error(data.error?.message || 'Failed to create template');
@@ -110,9 +108,9 @@ export function useTemplateChat() {
         throw { code: 'SERVICE_UNAVAILABLE', message: ERROR_MESSAGES.SERVICE_UNAVAILABLE };
       }
 
-      const assistantMessage = { 
-        role: 'assistant' as const, 
-        content: data.content 
+      const assistantMessage: Message = { 
+        role: 'assistant', 
+        content: data.content.map(item => ({ type: 'text', text: item.text }))
       };
 
       setMessages(prevMessages => [...prevMessages, assistantMessage]);

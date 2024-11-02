@@ -5,7 +5,7 @@ interface ToastTemplateActionProps {
 }
 
 export const ToastTemplateAction = ({ url }: ToastTemplateActionProps) => (
-  <ToastAction onClick={() => window.open(url, '_blank')}>
+  <ToastAction altText="View template" onClick={() => window.open(url, '_blank')}>
     Open Template
   </ToastAction>
 );
