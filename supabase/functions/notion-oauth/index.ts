@@ -20,51 +20,27 @@ serve(async (req) => {
     url: req.url,
   });
 
+  // Handle CORS preflight request
   if (req.method === 'OPTIONS') {
     console.log('Handling CORS preflight request');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const url = new URL(req.url);
-    const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state'); // This is our access token
-    const error = url.searchParams.get('error');
-
-    console.log('Request details:', { 
-      code: code ? 'present' : 'missing',
-      state: state ? 'present' : 'missing',
-      error: error || 'none',
-    });
-
-    if (error) {
-      throw new Error(`Notion authorization error: ${error}`);
-    }
+    // Parse the request body
+    const { code } = await req.json();
+    console.log('Received authorization code');
 
     if (!code) {
       throw new Error('No authorization code provided');
     }
 
-    if (!state) {
-      throw new Error('No authorization token provided');
-    }
-
     // Initialize Supabase client
     console.log('Initializing Supabase client');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
-    // Get user from session token
-    console.log('Getting user from session token');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(state);
-    
-    if (authError || !user) {
-      console.error('Auth error:', authError);
-      throw new Error('Invalid session');
-    }
 
-    console.log('User authenticated:', user.id);
+    // Exchange the authorization code for an access token
     console.log('Exchanging code for Notion access token');
-
     const notionResponse = await fetch('https://api.notion.com/v1/oauth/token', {
       method: 'POST',
       headers: {
@@ -79,19 +55,37 @@ serve(async (req) => {
     });
 
     console.log('Notion API response status:', notionResponse.status);
+    const responseText = await notionResponse.text();
+    console.log('Notion API response body:', responseText);
 
     if (!notionResponse.ok) {
-      const errorData = await notionResponse.json();
-      console.error('Notion API error:', errorData);
-      throw new Error('Failed to exchange authorization code');
+      throw new Error(`Notion API error: ${responseText}`);
     }
 
-    const data = await notionResponse.json();
+    const data = JSON.parse(responseText);
     console.log('Notion OAuth successful:', {
       workspace_id: data.workspace_id,
       workspace_name: data.workspace_name,
     });
 
+    // Get the user from the authorization header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      throw new Error('No authorization header');
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    console.log('Getting user from session token');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      throw new Error('Invalid session');
+    }
+
+    console.log('User authenticated:', user.id);
+
+    // Update the user's profile with Notion credentials
     console.log('Updating user profile');
     const { error: updateError } = await supabase
       .from('profiles')
@@ -109,29 +103,18 @@ serve(async (req) => {
 
     console.log('Profile updated successfully');
 
-    // Redirect back to the settings page with success parameters
-    const redirectUrl = new URL(REDIRECT_URI);
-    redirectUrl.searchParams.set('notion_connected', 'true');
-    
-    return new Response(null, {
-      status: 302,
-      headers: {
-        ...corsHeaders,
-        'Location': redirectUrl.toString(),
-      },
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('Error in notion-oauth function:', error);
-    const redirectUrl = new URL(REDIRECT_URI);
-    redirectUrl.searchParams.set('error', error.message);
-    
-    return new Response(null, {
-      status: 302,
-      headers: {
-        ...corsHeaders,
-        'Location': redirectUrl.toString(),
-      },
-    });
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });

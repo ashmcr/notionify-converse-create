@@ -28,21 +28,55 @@ export default function Settings() {
 
     fetchProfile();
 
-    // Check for Notion connection status from URL params
+    // Check for Notion OAuth callback parameters
     const params = new URLSearchParams(window.location.search);
-    if (params.get('notion_connected') === 'true') {
-      toast({
-        title: "Success",
-        description: "Successfully connected to Notion!",
-      });
-    } else if (params.get('error')) {
+    const code = params.get('code');
+    const error = params.get('error');
+    
+    if (code) {
+      console.log('Received Notion authorization code');
+      handleNotionCallback(code);
+    } else if (error) {
+      console.error('Notion authorization error:', error);
       toast({
         title: "Error",
-        description: params.get('error'),
+        description: `Notion authorization failed: ${error}`,
         variant: "destructive",
       });
     }
   }, [session]);
+
+  const handleNotionCallback = async (code: string) => {
+    try {
+      setIsConnecting(true);
+      console.log('Calling notion-oauth function...');
+      
+      const { data, error } = await supabase.functions.invoke('notion-oauth', {
+        body: { code },
+      });
+
+      console.log('Notion OAuth response:', { data, error });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Successfully connected to Notion!",
+      });
+      
+      // Refresh profile to show updated Notion connection status
+      await fetchProfile();
+    } catch (error: any) {
+      console.error('Error in Notion OAuth callback:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to connect to Notion",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   const fetchProfile = async () => {
     if (!session?.user?.id) return;
@@ -99,7 +133,9 @@ export default function Settings() {
       'page.write',
     ].join(',');
 
-    window.location.href = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&redirect_uri=${NOTION_REDIRECT_URI}&response_type=code&owner=user&scope=${scopes}&state=${session.access_token}`;
+    const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&redirect_uri=${NOTION_REDIRECT_URI}&response_type=code&owner=user&scope=${scopes}&state=${session.access_token}`;
+    console.log('Redirecting to Notion auth URL:', authUrl);
+    window.location.href = authUrl;
   };
 
   return (
