@@ -9,7 +9,7 @@ import { TemplateDbInitDialog } from "@/components/notion/TemplateDbInitDialog";
 import { NotionIntegrationCard } from "@/components/settings/NotionIntegrationCard";
 
 const NOTION_CLIENT_ID = import.meta.env.VITE_NOTION_CLIENT_ID;
-const NOTION_REDIRECT_URI = `https://adkxigojicsxkavxtqms.supabase.co/functions/v1/notion-oauth`;
+const NOTION_REDIRECT_URI = import.meta.env.VITE_NOTION_REDIRECT_URI;
 
 export default function Settings() {
   const session = useSession();

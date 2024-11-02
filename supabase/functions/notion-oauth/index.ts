@@ -5,6 +5,7 @@ const NOTION_CLIENT_ID = Deno.env.get('NOTION_CLIENT_ID')!;
 const NOTION_CLIENT_SECRET = Deno.env.get('NOTION_CLIENT_SECRET')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const REDIRECT_URI = 'https://notionify-converse-create.vercel.app/settings';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,7 +74,7 @@ serve(async (req) => {
       body: JSON.stringify({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: `https://adkxigojicsxkavxtqms.supabase.co/functions/v1/notion-oauth`,
+        redirect_uri: REDIRECT_URI,
       }),
     });
 
@@ -109,7 +110,7 @@ serve(async (req) => {
     console.log('Profile updated successfully');
 
     // Redirect back to the settings page with success parameters
-    const redirectUrl = new URL(`${url.origin}/settings`);
+    const redirectUrl = new URL(REDIRECT_URI);
     redirectUrl.searchParams.set('notion_connected', 'true');
     
     return new Response(null, {
@@ -122,7 +123,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in notion-oauth function:', error);
-    const redirectUrl = new URL(`${req.headers.get('origin') || ''}/settings`);
+    const redirectUrl = new URL(REDIRECT_URI);
     redirectUrl.searchParams.set('error', error.message);
     
     return new Response(null, {
