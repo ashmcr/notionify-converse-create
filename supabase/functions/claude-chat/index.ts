@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { Client } from 'https://esm.sh/@anthropic-ai/sdk@0.4.3'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,19 +11,14 @@ const SYSTEM_PROMPT = `You are a helpful assistant trained to create Notion temp
 
 const REFINEMENT_PROMPTS = {
   properties: `Based on the template specification provided, suggest additional properties that would enhance the functionality. Include exact Notion API configurations for each suggestion.`,
-  
   views: `Analyze the current view configurations and recommend additional views that would improve data visualization and workflow. Provide complete view specifications.`,
-  
   automations: `Review the template structure and suggest advanced automations using Notion formulas, relations, and rollups. Include exact formula syntax and configuration details.`,
-  
   optimization: `Evaluate the current template specification and suggest optimizations for performance and usability. Include specific technical improvements.`
 };
 
 const ERROR_PROMPTS = {
   invalidProperty: `The property configuration is invalid. Please provide a corrected specification that matches the Notion API requirements. Current error: {error}`,
-  
   invalidView: `The view configuration is incorrect. Please provide a valid view specification according to the Notion API documentation. Current error: {error}`,
-  
   formulaError: `The formula syntax is invalid. Please provide a corrected formula that follows Notion's formula syntax. Current error: {error}`
 };
 
@@ -123,35 +117,44 @@ serve(async (req) => {
         ]
       : messages;
 
-    const anthropic = new Client({
-      apiKey: Deno.env.get('ANTHROPIC_API_KEY'),
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') || '',
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-sonnet-20240229',
+        max_tokens: 4096,
+        temperature: 0.2,
+        messages: [
+          {
+            role: 'system',
+            content: SYSTEM_PROMPT
+          },
+          ...finalMessages.map(msg => ({
+            role: msg.role,
+            content: `${msg.role === 'user' && !refinementType ? 'Create a Notion template for: ' : ''}${msg.content}`
+          }))
+        ]
+      })
     });
 
-    const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
-      max_tokens: 4096,
-      temperature: 0.2,
-      messages: [
-        {
-          role: 'system',
-          content: SYSTEM_PROMPT
-        },
-        ...finalMessages.map(msg => ({
-          role: msg.role,
-          content: `${msg.role === 'user' && !refinementType ? 'Create a Notion template for: ' : ''}${msg.content}`
-        }))
-      ]
-    });
+    if (!response.ok) {
+      throw new Error(`Anthropic API error: ${response.status} ${response.statusText}`);
+    }
 
-    console.log('Claude API response:', JSON.stringify(response));
+    const data = await response.json();
+    console.log('Claude API response:', JSON.stringify(data));
 
-    const validation = validateTemplateSpec(response.content[0].text);
+    const validation = validateTemplateSpec(data.content[0].text);
     if (!validation.isValid) {
       throw new Error(validation.error || 'Invalid template specification format');
     }
 
     return new Response(
-      JSON.stringify(response),
+      JSON.stringify(data),
       { 
         status: 200,
         headers: {
