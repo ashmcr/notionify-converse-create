@@ -7,14 +7,11 @@ import { TypingIndicator } from "./TypingIndicator";
 import { ChatInput } from "./ChatInput";
 import { processTemplateResponse } from "@/utils/templateProcessor";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2 } from "lucide-react";
 
 interface Message {
   role: 'user' | 'assistant';
-  content: string;
+  content: string | { type: string; text: string }[];
 }
-
-const SYSTEM_PROMPT = `// ... keep existing code (system prompt)`;
 
 const INITIAL_MESSAGE: Message = {
   role: 'assistant',
@@ -50,7 +47,6 @@ export function TemplateChatInterface() {
     console.error('Chat error:', error);
     setError(null);
 
-    // Handle specific error types
     if (error.status === 429) {
       setError(ERROR_MESSAGES.RATE_LIMIT);
     } else if (error.message?.includes('token')) {
@@ -104,9 +100,11 @@ export function TemplateChatInterface() {
       const response = await supabase.functions.invoke('claude-chat', {
         body: {
           messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            ...messages,
-            newMessage
+            ...messages.map(msg => ({
+              role: msg.role,
+              content: typeof msg.content === 'string' ? msg.content : msg.content.map(c => c.text).join('\n')
+            })),
+            { role: 'user', content: userInput }
           ]
         }
       });
@@ -121,7 +119,7 @@ export function TemplateChatInterface() {
       setMessages(prevMessages => [...prevMessages, assistantMessage]);
 
       try {
-        const structure = processTemplateResponse(response.data.content);
+        const structure = processTemplateResponse(response.data.content[0].text);
         setTemplateStructure(structure);
 
         if (structure.properties.length > 0 || structure.views.length > 0) {
