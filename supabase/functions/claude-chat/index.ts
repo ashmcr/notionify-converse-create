@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { validateMessages } from './validation.ts';
+import { validateMessages, validateTemplateSpec } from './validation.ts';
 import { handleError } from './error-handler.ts';
 import { SYSTEM_PROMPT, REFINEMENT_PROMPTS, ERROR_PROMPTS } from './prompts.ts';
 import type { ChatRequest } from './types.ts';
@@ -38,8 +38,14 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'claude-3-sonnet-20240229',
         max_tokens: 4096,
-        messages: finalMessages,
-        system: SYSTEM_PROMPT
+        temperature: 0.2,
+        messages: [
+          {
+            role: 'system',
+            content: SYSTEM_PROMPT
+          },
+          ...finalMessages
+        ],
       })
     });
 
@@ -49,6 +55,16 @@ serve(async (req) => {
     }
 
     const data = await response.json();
+    
+    try {
+      // Validate the template specification in the response
+      const templateSpec = JSON.parse(data.content[0].text);
+      validateTemplateSpec(templateSpec);
+    } catch (error) {
+      console.error('Template validation error:', error);
+      // Continue with the response even if validation fails
+    }
+
     console.log('Claude API response:', JSON.stringify(data));
 
     return new Response(
