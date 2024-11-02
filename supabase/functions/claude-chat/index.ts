@@ -28,7 +28,6 @@ serve(async (req) => {
         }]
       : validatedMessages;
 
-    // Make direct request to Anthropic API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -40,7 +39,7 @@ serve(async (req) => {
         model: 'claude-3-sonnet-20240229',
         max_tokens: 4096,
         temperature: 0.2,
-        system: SYSTEM_PROMPT + "\nIMPORTANT: You must ALWAYS respond with valid JSON that matches the template specification format. Never include any natural language responses.",
+        system: SYSTEM_PROMPT,
         messages: finalMessages.map(msg => ({
           role: msg.role,
           content: msg.content
@@ -49,44 +48,49 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
+      console.error('Claude API error:', response.status, response.statusText);
       const errorData = await response.json().catch(() => ({}));
       throw new Error(`Anthropic API error: ${response.status} ${response.statusText}\n${JSON.stringify(errorData)}`);
     }
 
     const data = await response.json();
     console.log('Claude API response:', data);
-    
+
+    if (!data.content || !Array.isArray(data.content) || !data.content[0]?.text) {
+      console.error('Invalid API response structure:', data);
+      throw new Error('Invalid API response structure');
+    }
+
+    const content = data.content[0].text;
+    console.log('Processing content:', content);
+
+    // Extract JSON from the response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('No JSON found in response:', content);
+      throw new Error('No valid JSON found in response');
+    }
+
     let templateSpec;
     try {
-      // The response from Anthropic API has a different structure
-      if (!data.content || !Array.isArray(data.content) || !data.content[0]?.text) {
-        console.error('Unexpected API response structure:', data);
-        throw new Error('Invalid API response structure');
-      }
-
-      const content = data.content[0].text;
-      console.log('Attempting to parse content:', content);
-      
-      // Try to find JSON in the response if there's any surrounding text
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error('No JSON found in response content:', content);
-        throw new Error('No JSON found in response');
-      }
-      
       templateSpec = JSON.parse(jsonMatch[0]);
-      validateTemplateSpec(templateSpec);
       
       if (!templateSpec.template) {
         throw new Error('Missing template object in response');
       }
+
+      validateTemplateSpec(templateSpec);
     } catch (error) {
       console.error('Template validation error:', error);
       throw new Error(`Invalid template format: ${error.message}`);
     }
 
     return new Response(
-      JSON.stringify({ content: [{ text: JSON.stringify(templateSpec) }] }),
+      JSON.stringify({ 
+        content: [{ 
+          text: JSON.stringify(templateSpec, null, 2)
+        }] 
+      }),
       { 
         headers: {
           ...corsHeaders,
@@ -99,7 +103,7 @@ serve(async (req) => {
     console.error('Error details:', {
       name: error.name,
       message: error.message,
-      status: error.status
+      stack: error.stack
     });
 
     const errorResponse = handleError(error);
