@@ -31,15 +31,26 @@ export function processTemplateResponse(response: string): TemplateStructure {
   try {
     const parsed = JSON.parse(response);
     
-    if (!parsed.template_name || !parsed.description || !parsed.blocks || !parsed.database_properties) {
+    if (!parsed.template_name || !parsed.description || !parsed.blocks) {
       throw new Error('Missing required template fields');
+    }
+
+    // Convert the new databases format to the expected database_properties format
+    const database_properties: Record<string, DatabaseProperty> = {};
+    if (parsed.databases && parsed.databases.length > 0) {
+      const mainDatabase = parsed.databases[0]; // Take the first database
+      if (mainDatabase.properties) {
+        Object.entries(mainDatabase.properties).forEach(([key, value]) => {
+          database_properties[key] = value as DatabaseProperty;
+        });
+      }
     }
 
     return {
       template_name: parsed.template_name,
       description: parsed.description,
       blocks: parsed.blocks,
-      database_properties: parsed.database_properties,
+      database_properties,
       sample_data: parsed.sample_data || []
     };
   } catch (error) {
@@ -60,8 +71,8 @@ export function validateTemplateSpec(content: string): { isValid: boolean; error
       return { isValid: false, error: 'Missing or invalid blocks array' };
     }
 
-    if (!spec.database_properties || typeof spec.database_properties !== 'object') {
-      return { isValid: false, error: 'Missing or invalid database properties' };
+    if (!spec.databases || !Array.isArray(spec.databases)) {
+      return { isValid: false, error: 'Missing or invalid databases array' };
     }
 
     for (const block of spec.blocks) {
