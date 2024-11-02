@@ -37,10 +37,16 @@ async function createTemplateInNotion(spec: TemplateSpec) {
       },
       properties: {
         "Title": {
-          title: [{ text: { content: spec.template_name } }]
+          title: [{ 
+            type: "text",
+            text: { content: spec.template_name } 
+          }]
         },
         "Description": {
-          rich_text: [{ text: { content: spec.description } }]
+          rich_text: [{ 
+            type: "text",
+            text: { content: spec.description } 
+          }]
         },
         "Category": {
           select: { 
@@ -53,13 +59,16 @@ async function createTemplateInNotion(spec: TemplateSpec) {
           }
         },
         "CreatedBy": {
-          rich_text: [{ text: { content: spec.user_id } }]
+          rich_text: [{ 
+            type: "text",
+            text: { content: spec.user_id } 
+          }]
         },
         "CloneCount": {
           number: 0
         },
         "PublicURL": {
-          url: ""  // Will be updated after page creation
+          url: null  // Will be updated after page creation
         }
       }
     });
@@ -80,7 +89,10 @@ async function createTemplateInNotion(spec: TemplateSpec) {
       console.log('[notion] Creating template database');
       const database = await notion.databases.create({
         parent: { page_id: templatePage.id },
-        title: [{ text: { content: `${spec.template_name} Database` } }],
+        title: [{ 
+          type: "text",
+          text: { content: `${spec.template_name} Database` } 
+        }],
         properties: spec.database_properties
       });
 
