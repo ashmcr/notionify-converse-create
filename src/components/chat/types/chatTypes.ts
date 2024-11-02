@@ -25,3 +25,11 @@ export interface ChatError {
   message: string;
   status?: number;
 }
+
+export interface TemplateStructure {
+  template_name: string;
+  description: string;
+  blocks: any[];
+  database_properties: Record<string, any>;
+  sample_data?: any[];
+}
