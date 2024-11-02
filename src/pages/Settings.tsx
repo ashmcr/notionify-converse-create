@@ -128,6 +128,8 @@ export default function Settings() {
     }
   }, []);
 
+  if (!session) return null;
+
   return (
     <MainLayout>
       <div className="container max-w-4xl py-8">
