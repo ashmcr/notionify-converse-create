@@ -5,82 +5,47 @@ const NOTION_CLIENT_ID = Deno.env.get('NOTION_CLIENT_ID')!;
 const NOTION_CLIENT_SECRET = Deno.env.get('NOTION_CLIENT_SECRET')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const REDIRECT_URI = 'https://notionify-converse-create.vercel.app/settings';
+const FRONTEND_URL = 'https://notionify-converse-create.vercel.app';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log('Edge function loaded with configuration:', {
-  hasNotionClientId: !!NOTION_CLIENT_ID,
-  hasNotionClientSecret: !!NOTION_CLIENT_SECRET,
-  hasSupabaseUrl: !!SUPABASE_URL,
-  hasSupabaseServiceRoleKey: !!SUPABASE_SERVICE_ROLE_KEY,
-  redirectUri: REDIRECT_URI,
-});
+console.log('Edge function loaded with configuration');
 
 serve(async (req) => {
   console.log('Received request:', {
     method: req.method,
     url: req.url,
-    headers: Object.fromEntries(req.headers.entries()),
   });
 
   // Handle CORS preflight request
   if (req.method === 'OPTIONS') {
-    console.log('Handling CORS preflight request');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Parse the request body
-    const requestBody = await req.text();
-    console.log('Raw request body:', requestBody);
-    
-    let requestData;
-    try {
-      requestData = JSON.parse(requestBody);
-    } catch (e) {
-      console.error('Failed to parse request body:', e);
-      throw new Error('Invalid JSON in request body');
-    }
-    
-    const { code } = requestData;
-    console.log('Parsed request data:', { code: code ? 'present' : 'missing' });
+    const url = new URL(req.url);
+    const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state');
+
+    console.log('Received params:', { 
+      hasCode: !!code,
+      hasState: !!state 
+    });
 
     if (!code) {
       throw new Error('No authorization code provided');
     }
 
-    // Get authorization header
-    const authHeader = req.headers.get('authorization');
-    console.log('Authorization header:', authHeader ? 'present' : 'missing');
-    
-    if (!authHeader) {
-      throw new Error('No authorization header provided');
+    if (!state) {
+      throw new Error('No state token provided');
     }
 
     // Initialize Supabase client
     console.log('Initializing Supabase client');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Get user from token
-    const token = authHeader.replace('Bearer ', '');
-    console.log('Getting user from session token');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError) {
-      console.error('Auth error:', authError);
-      throw new Error('Invalid session');
-    }
-
-    if (!user) {
-      console.error('No user found in session');
-      throw new Error('User not found');
-    }
-
-    console.log('User authenticated:', user.id);
 
     // Exchange the authorization code for an access token
     console.log('Exchanging code for Notion access token');
@@ -93,7 +58,7 @@ serve(async (req) => {
       body: JSON.stringify({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: REDIRECT_URI,
+        redirect_uri: `${SUPABASE_URL}/functions/v1/notion-oauth`,
       }),
     });
 
@@ -110,6 +75,17 @@ serve(async (req) => {
       workspace_id: data.workspace_id,
       workspace_name: data.workspace_name,
     });
+
+    // Get user from state token
+    console.log('Getting user from state token');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(state);
+    
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      throw new Error('Invalid session');
+    }
+
+    console.log('User authenticated:', user.id);
 
     // Update the user's profile with Notion credentials
     console.log('Updating user profile');
@@ -129,21 +105,22 @@ serve(async (req) => {
 
     console.log('Profile updated successfully');
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Redirect back to the frontend with success parameter
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': `${FRONTEND_URL}/settings?success=true`,
+      },
     });
 
   } catch (error) {
     console.error('Error in notion-oauth function:', error);
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        success: false
-      }),
-      { 
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
+    // Redirect back to the frontend with error parameter
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': `${FRONTEND_URL}/settings?error=${encodeURIComponent(error.message)}`,
+      },
+    });
   }
 });

@@ -28,73 +28,28 @@ export default function Settings() {
 
     fetchProfile();
 
-    // Check for Notion OAuth callback parameters
+    // Check for success/error parameters
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
+    const success = params.get('success');
     const error = params.get('error');
     
-    if (code) {
-      console.log('Received Notion authorization code:', code);
-      console.log('Current session:', session);
-      handleNotionCallback(code);
-    } else if (error) {
-      console.error('Notion authorization error:', error);
-      toast({
-        title: "Error",
-        description: `Notion authorization failed: ${error}`,
-        variant: "destructive",
-      });
-    }
-  }, [session]);
-
-  const handleNotionCallback = async (code: string) => {
-    try {
-      setIsConnecting(true);
-      console.log('Starting Notion OAuth callback process...');
-      console.log('Session access token:', session?.access_token ? 'Present' : 'Missing');
-      
-      if (!session?.access_token) {
-        throw new Error('No valid session token found');
-      }
-
-      console.log('Calling notion-oauth function with code...');
-      const functionResponse = await supabase.functions.invoke('notion-oauth', {
-        body: { code },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      console.log('Notion OAuth function response:', functionResponse);
-
-      if (functionResponse.error) {
-        throw new Error(functionResponse.error.message || 'Failed to connect to Notion');
-      }
-
-      if (!functionResponse.data?.success) {
-        throw new Error('Invalid response from Notion OAuth');
-      }
-
+    if (success) {
       toast({
         title: "Success",
         description: "Successfully connected to Notion!",
       });
-      
-      // Refresh profile to show updated Notion connection status
-      await fetchProfile();
-    } catch (error: any) {
-      console.error('Error in Notion OAuth callback:', error);
+      fetchProfile();
+    } else if (error) {
       toast({
         title: "Error",
-        description: error.message || "Failed to connect to Notion",
+        description: decodeURIComponent(error),
         variant: "destructive",
       });
-    } finally {
-      setIsConnecting(false);
-      // Clear the URL parameters
-      window.history.replaceState({}, '', '/settings');
     }
-  };
+
+    // Clear the URL parameters
+    window.history.replaceState({}, '', '/settings');
+  }, [session]);
 
   const fetchProfile = async () => {
     if (!session?.user?.id) return;
