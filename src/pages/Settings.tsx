@@ -58,11 +58,20 @@ export default function Settings() {
     }
   };
 
-  const handleNotionConnect = () => {
+  const handleNotionConnect = async () => {
     if (!NOTION_CLIENT_ID) {
       toast({
         title: "Configuration Error",
         description: "Notion Client ID is not configured",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!session?.access_token) {
+      toast({
+        title: "Authentication Error",
+        description: "No valid session found",
         variant: "destructive",
       });
       return;
@@ -74,6 +83,9 @@ export default function Settings() {
       'page.read',
       'page.write',
     ].join(',');
+
+    // Store the access token in localStorage before redirecting
+    localStorage.setItem('supabase_auth_token', session.access_token);
 
     window.location.href = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&redirect_uri=${NOTION_REDIRECT_URI}&response_type=code&owner=user&scope=${scopes}`;
   };

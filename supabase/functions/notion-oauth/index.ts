@@ -17,7 +17,6 @@ serve(async (req) => {
   console.log('Received request:', {
     method: req.method,
     url: req.url,
-    headers: Object.fromEntries(req.headers.entries()),
   });
 
   if (req.method === 'OPTIONS') {
@@ -26,29 +25,43 @@ serve(async (req) => {
   }
 
   try {
-    const { code, redirectUri } = await req.json();
+    // Get the authorization token from the URL search params
+    const url = new URL(req.url);
+    const code = url.searchParams.get('code');
+    const error = url.searchParams.get('error');
     const authHeader = req.headers.get('Authorization');
 
-    console.log('Request payload:', { 
+    console.log('Request details:', { 
       code: code ? 'present' : 'missing',
-      redirectUri: redirectUri || 'missing'
+      error: error || 'none',
+      authHeader: authHeader ? 'present' : 'missing'
     });
-    console.log('Auth header:', authHeader ? 'present' : 'missing');
+
+    if (error) {
+      throw new Error(`Notion authorization error: ${error}`);
+    }
 
     if (!code) {
       throw new Error('No authorization code provided');
     }
 
     if (!authHeader) {
-      throw new Error('No authorization header');
+      // Try to get the token from the URL parameters
+      const token = url.searchParams.get('state');
+      if (!token) {
+        throw new Error('No authorization token found');
+      }
+      req.headers.set('Authorization', `Bearer ${token}`);
     }
 
+    // Initialize Supabase client
     console.log('Initializing Supabase client');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
+    // Get user from session token
     console.log('Getting user from session token');
     const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
+      authHeader?.replace('Bearer ', '') || url.searchParams.get('state')
     );
     
     if (authError || !user) {
@@ -68,7 +81,7 @@ serve(async (req) => {
       body: JSON.stringify({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: redirectUri,
+        redirect_uri: `https://adkxigojicsxkavxtqms.supabase.co/functions/v1/notion-oauth`,
       }),
     });
 
@@ -103,22 +116,28 @@ serve(async (req) => {
 
     console.log('Profile updated successfully');
 
-    return new Response(JSON.stringify({
-      workspace_id: data.workspace_id,
-      workspace_name: data.workspace_name,
-    }), {
+    // Redirect back to the settings page with success parameters
+    const redirectUrl = new URL(`${req.headers.get('origin')}/settings`);
+    redirectUrl.searchParams.set('notion_connected', 'true');
+    
+    return new Response(null, {
+      status: 302,
       headers: {
-        'Content-Type': 'application/json',
         ...corsHeaders,
+        'Location': redirectUrl.toString(),
       },
     });
+
   } catch (error) {
     console.error('Error in notion-oauth function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 400,
+    const redirectUrl = new URL(`${req.headers.get('origin')}/settings`);
+    redirectUrl.searchParams.set('error', error.message);
+    
+    return new Response(null, {
+      status: 302,
       headers: {
-        'Content-Type': 'application/json',
         ...corsHeaders,
+        'Location': redirectUrl.toString(),
       },
     });
   }
