@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { validateMessages } from './validation.ts';
 import { handleError } from './error-handler.ts';
 import { SYSTEM_PROMPT } from './prompts.ts';
+import { Anthropic } from 'https://esm.sh/@anthropic-ai/sdk@0.14.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,82 +19,109 @@ serve(async (req) => {
     
     console.log('Processing template chat request:', { messages });
 
+    // Validate incoming messages
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      throw new Error('Invalid messages array');
+    }
+
     const validatedMessages = validateMessages(messages);
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') || '',
-      },
-      body: JSON.stringify({
-        model: 'claude-3-sonnet-20240229',
-        max_tokens: 4096,
-        temperature: 0.2,
-        system: SYSTEM_PROMPT,
-        messages: validatedMessages.map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }))
-      })
+    // Initialize Anthropic client
+    const anthropic = new Anthropic({
+      apiKey: Deno.env.get('ANTHROPIC_API_KEY') || '',
     });
 
-    if (!response.ok) {
-      console.error('Claude API error:', response.status, response.statusText);
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Anthropic API error: ${response.status} ${response.statusText}\n${JSON.stringify(errorData)}`);
-    }
+    // Get template specification from Claude
+    const claudeResponse = await anthropic.messages.create({
+      model: 'claude-3-sonnet-20240229',
+      messages: validatedMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      })),
+      max_tokens: 4096,
+      temperature: 0.2,
+      system: SYSTEM_PROMPT,
+    });
 
-    const data = await response.json();
-    console.log('Claude API response:', data);
-
-    // Validate the response structure
-    if (!data.content || !Array.isArray(data.content) || data.content.length === 0) {
-      console.error('Invalid or empty API response structure:', data);
-      throw new Error('Invalid or empty API response structure');
-    }
-
-    // Get the first content item's text
-    const contentItem = data.content[0];
-    if (!contentItem || typeof contentItem.text !== 'string') {
-      console.error('Invalid content structure:', contentItem);
-      throw new Error('Invalid content structure in response');
-    }
-
-    // Try to extract JSON from the content using regex
-    const jsonMatch = contentItem.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('No JSON found in response:', contentItem.text);
-      throw new Error('No valid JSON found in response');
-    }
-
-    try {
-      const templateSpec = JSON.parse(jsonMatch[0]);
-      
-      if (!templateSpec.template_name || !templateSpec.description || !templateSpec.blocks) {
-        throw new Error('Invalid template format: Missing required fields');
-      }
-
+    // Validate Claude's response
+    if (!claudeResponse || !claudeResponse.content || claudeResponse.content.length === 0) {
+      console.error('Empty response from Claude:', claudeResponse);
       return new Response(
-        JSON.stringify({ content: [{ text: jsonMatch[0] }] }),
+        JSON.stringify({
+          error: {
+            message: 'Empty response from Claude',
+            details: 'The AI response was empty. Please try again.'
+          }
+        }),
         { 
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
+          status: 400,
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders
           }
         }
       );
-    } catch (parseError) {
-      console.error('JSON parsing error:', parseError);
-      throw new Error(`Failed to parse template JSON from response: ${parseError.message}`);
     }
 
+    // Get the text content
+    const responseContent = claudeResponse.content[0]?.text;
+    
+    if (!responseContent) {
+      console.error('No text content in response:', claudeResponse);
+      return new Response(
+        JSON.stringify({
+          error: {
+            message: 'No text content in response',
+            details: 'The AI response contained no text content.'
+          }
+        }),
+        { 
+          status: 400,
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      );
+    }
+
+    // Extract and validate JSON from the response
+    const templateSpec = extractJsonFromResponse(responseContent);
+    
+    if (!templateSpec) {
+      console.error('Failed to extract valid JSON from response:', responseContent);
+      return new Response(
+        JSON.stringify({
+          error: {
+            message: 'Invalid template specification',
+            details: 'Could not extract valid JSON from AI response'
+          }
+        }),
+        { 
+          status: 400,
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({ content: [{ text: JSON.stringify(templateSpec) }] }),
+      { 
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
   } catch (error) {
-    console.error('Error details:', {
-      name: error.name,
+    console.error('Error in claude-chat function:', {
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
+      response: error.response
     });
 
     const errorResponse = handleError(error);
@@ -109,3 +137,41 @@ serve(async (req) => {
     );
   }
 });
+
+function extractJsonFromResponse(response: string): any {
+  try {
+    // First try to find JSON in code blocks
+    const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[1]);
+      if (validateTemplateSpec(parsed)) {
+        return parsed;
+      }
+    }
+
+    // If no valid JSON in code blocks, try to parse the entire response
+    const parsed = JSON.parse(response);
+    if (validateTemplateSpec(parsed)) {
+      return parsed;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('JSON parsing error:', error);
+    return null;
+  }
+}
+
+function validateTemplateSpec(spec: any): boolean {
+  if (!spec || typeof spec !== 'object') return false;
+
+  const requiredFields = ['template_name', 'description', 'blocks', 'database_properties'];
+  for (const field of requiredFields) {
+    if (!spec[field]) return false;
+  }
+
+  if (!Array.isArray(spec.blocks)) return false;
+  if (typeof spec.database_properties !== 'object') return false;
+
+  return true;
+}
