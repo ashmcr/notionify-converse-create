@@ -147,11 +147,23 @@ serve(async (req) => {
     // Create template with nested structure
     const result = await createTemplateContainer(notion, templateSpec);
 
+    // Set public sharing permissions for the template page
+    await notion.pages.update({
+      page_id: result.templateId,
+      public_permission: { 
+        type: "public",
+        allow_duplicate: true 
+      }
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
-        containerId: result.containerId,
-        templateId: result.templateId
+        template: {
+          id: result.templateId,
+          containerId: result.containerId,
+          url: `https://notion.so/${result.templateId}`
+        }
       }),
       { 
         headers: {
