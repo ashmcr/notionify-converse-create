@@ -11,31 +11,39 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+console.log('Edge function loaded and running');
+
 serve(async (req) => {
-  // Handle CORS preflight requests
+  console.log('Received request:', {
+    method: req.method,
+    url: req.url,
+    headers: Object.fromEntries(req.headers.entries()),
+  });
+
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight request');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('Notion OAuth endpoint called');
     const { code } = await req.json();
     const authHeader = req.headers.get('Authorization');
 
+    console.log('Request payload:', { code: code ? 'present' : 'missing' });
+    console.log('Auth header:', authHeader ? 'present' : 'missing');
+
     if (!code) {
-      console.error('No authorization code provided');
       throw new Error('No authorization code provided');
     }
 
     if (!authHeader) {
-      console.error('No authorization header');
       throw new Error('No authorization header');
     }
 
     console.log('Initializing Supabase client');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    console.log('Getting user from session');
+    console.log('Getting user from session token');
     const { data: { user }, error: authError } = await supabase.auth.getUser(
       authHeader.replace('Bearer ', '')
     );
@@ -45,8 +53,10 @@ serve(async (req) => {
       throw new Error('Invalid session');
     }
 
-    console.log('Exchanging code for access token');
-    const response = await fetch('https://api.notion.com/v1/oauth/token', {
+    console.log('User authenticated:', user.id);
+    console.log('Exchanging code for Notion access token');
+
+    const notionResponse = await fetch('https://api.notion.com/v1/oauth/token', {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${btoa(`${NOTION_CLIENT_ID}:${NOTION_CLIENT_SECRET}`)}`,
@@ -55,20 +65,25 @@ serve(async (req) => {
       body: JSON.stringify({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: `${req.headers.get('origin')}/settings`,
+        redirect_uri: `${new URL(req.url).origin}/settings`,
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
+    console.log('Notion API response status:', notionResponse.status);
+
+    if (!notionResponse.ok) {
+      const errorData = await notionResponse.json();
       console.error('Notion API error:', errorData);
       throw new Error('Failed to exchange authorization code');
     }
 
-    const data = await response.json();
-    console.log('Successfully received Notion tokens');
+    const data = await notionResponse.json();
+    console.log('Notion OAuth successful:', {
+      workspace_id: data.workspace_id,
+      workspace_name: data.workspace_name,
+    });
 
-    console.log('Updating user profile with Notion credentials');
+    console.log('Updating user profile');
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
@@ -83,10 +98,9 @@ serve(async (req) => {
       throw new Error('Failed to update user profile');
     }
 
-    console.log('Successfully updated user profile with Notion credentials');
+    console.log('Profile updated successfully');
 
     return new Response(JSON.stringify({
-      access_token: data.access_token,
       workspace_id: data.workspace_id,
       workspace_name: data.workspace_name,
     }), {

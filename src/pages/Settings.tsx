@@ -83,14 +83,20 @@ export default function Settings() {
     
     setIsConnecting(true);
     try {
-      console.log('Calling notion-oauth function with code');
+      console.log('Starting Notion OAuth process...');
       const { data, error } = await supabase.functions.invoke('notion-oauth', {
         body: { code },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
-      if (error) throw error;
-      
-      console.log('Notion OAuth response:', data);
+      console.log('Response from notion-oauth function:', { data, error });
+
+      if (error) {
+        console.error('Notion OAuth error:', error);
+        throw error;
+      }
       
       toast({
         title: "Success",
@@ -103,7 +109,7 @@ export default function Settings() {
       console.error('Notion connection error:', error);
       toast({
         title: "Error connecting Notion",
-        description: error.message,
+        description: error.message || 'Failed to connect to Notion',
         variant: "destructive",
       });
     } finally {
