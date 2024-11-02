@@ -1,7 +1,8 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { Anthropic } from "https://esm.sh/@anthropic-ai/sdk@0.4.3";
 import { validateMessages, validateTemplateSpec } from './validation.ts';
 import { handleError } from './error-handler.ts';
-import { SYSTEM_PROMPT, REFINEMENT_PROMPTS, ERROR_PROMPTS } from './prompts.ts';
+import { SYSTEM_PROMPT, REFINEMENT_PROMPTS } from './prompts.ts';
 import type { ChatRequest } from './types.ts';
 
 const corsHeaders = {
@@ -27,6 +28,10 @@ serve(async (req) => {
           content: REFINEMENT_PROMPTS[refinementType as keyof typeof REFINEMENT_PROMPTS]
         }]
       : validatedMessages;
+
+    const anthropic = new Anthropic({
+      apiKey: Deno.env.get('ANTHROPIC_API_KEY') || '',
+    });
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

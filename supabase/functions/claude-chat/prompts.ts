@@ -63,7 +63,7 @@ export const REFINEMENT_PROMPTS = {
 };
 
 export const ERROR_PROMPTS = {
-  invalidProperty: `The property configuration is invalid. Please provide a corrected specification that matches the Notion API requirements. Current error: {error}`,
-  invalidView: `The view configuration is incorrect. Please provide a valid view specification according to the Notion API documentation. Current error: {error}`,
-  formulaError: `The formula syntax is invalid. Please provide a corrected formula that follows Notion's formula syntax. Current error: {error}`
+  invalidProperty: `The property configuration is invalid. Please provide a corrected specification that matches the Notion API requirements.`,
+  invalidView: `The view configuration is incorrect. Please provide a valid view specification according to the Notion API documentation.`,
+  formulaError: `The formula syntax is invalid. Please provide a corrected formula that follows Notion's formula syntax.`
 };
