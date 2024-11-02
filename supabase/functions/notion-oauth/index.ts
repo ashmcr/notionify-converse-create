@@ -40,7 +40,7 @@ async function verifyJWT(token: string) {
     const jwt = token.replace('Bearer ', '');
     const { payload } = await jose.jwtVerify(
       jwt,
-      new TextEncoder().encode(Deno.env.get('SUPABASE_JWT_SECRET'))
+      new TextEncoder().encode(Deno.env.get('JWT_SECRET'))
     );
     return payload;
   } catch (error) {
