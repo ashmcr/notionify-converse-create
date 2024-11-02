@@ -11,7 +11,6 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ role, content }: MessageBubbleProps) {
-  // Handle different content formats
   const messageText = typeof content === 'string' 
     ? content 
     : Array.isArray(content)
