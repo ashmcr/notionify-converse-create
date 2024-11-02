@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSession } from "@supabase/auth-helpers-react";
 import { useToast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Message, ChatError, ChatResponse, TemplateResponse } from "../types/chatTypes";
 import { processTemplateResponse } from "@/utils/templateProcessor";
@@ -55,10 +56,7 @@ export function useTemplateChat() {
           title: "Success",
           description: "Template created! Click to view.",
           action: (
-            <ToastAction 
-              altText="View template"
-              onClick={() => window.open(data.url, '_blank')}
-            >
+            <ToastAction onClick={() => window.open(data.url, '_blank')}>
               Open Template
             </ToastAction>
           )
