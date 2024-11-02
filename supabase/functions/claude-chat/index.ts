@@ -48,40 +48,40 @@ serve(async (req) => {
     const data = await response.json();
     console.log('Claude API response:', data);
 
-    if (!data.content || !Array.isArray(data.content) || !data.content[0]?.text) {
+    // The Claude-3 API returns the response in a different structure
+    if (!data.content || !Array.isArray(data.content)) {
       console.error('Invalid API response structure:', data);
       throw new Error('Invalid API response structure');
     }
 
-    const content = data.content[0].text;
-    console.log('Processing content:', content);
-
-    // Extract JSON from the response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('No JSON found in response:', content);
-      throw new Error('No valid JSON found in response');
+    // Extract the text content from the response
+    const content = data.content[0]?.text;
+    if (!content) {
+      console.error('No content in response:', data);
+      throw new Error('No content in response');
     }
 
-    const templateSpec = JSON.parse(jsonMatch[0]);
-    
-    if (!templateSpec.template_name || !templateSpec.description || !templateSpec.blocks) {
-      throw new Error('Invalid template format: Missing required fields');
-    }
-
-    return new Response(
-      JSON.stringify({ 
-        content: [{ 
-          text: JSON.stringify(templateSpec, null, 2)
-        }] 
-      }),
-      { 
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+    // Try to parse JSON from the response
+    try {
+      const templateSpec = JSON.parse(content);
+      
+      if (!templateSpec.template_name || !templateSpec.description || !templateSpec.blocks) {
+        throw new Error('Invalid template format: Missing required fields');
       }
-    );
+
+      return new Response(
+        JSON.stringify({ content: [{ text: content }] }),
+        { 
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      throw new Error('Failed to parse template JSON from response');
+    }
 
   } catch (error) {
     console.error('Error details:', {
