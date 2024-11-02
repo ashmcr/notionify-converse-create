@@ -28,7 +28,7 @@ serve(async (req) => {
         }]
       : validatedMessages;
 
-    // Make direct request to Anthropic API instead of using SDK
+    // Make direct request to Anthropic API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -58,18 +58,28 @@ serve(async (req) => {
     
     let templateSpec;
     try {
-      // Extract the actual content from Claude's response
+      // The response from Anthropic API has a different structure
+      if (!data.content || !Array.isArray(data.content) || !data.content[0]?.text) {
+        console.error('Unexpected API response structure:', data);
+        throw new Error('Invalid API response structure');
+      }
+
       const content = data.content[0].text;
       console.log('Attempting to parse content:', content);
       
       // Try to find JSON in the response if there's any surrounding text
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
+        console.error('No JSON found in response content:', content);
         throw new Error('No JSON found in response');
       }
       
       templateSpec = JSON.parse(jsonMatch[0]);
       validateTemplateSpec(templateSpec);
+      
+      if (!templateSpec.template) {
+        throw new Error('Missing template object in response');
+      }
     } catch (error) {
       console.error('Template validation error:', error);
       throw new Error(`Invalid template format: ${error.message}`);
