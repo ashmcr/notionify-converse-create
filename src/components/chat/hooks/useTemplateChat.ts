@@ -45,6 +45,10 @@ export function useTemplateChat() {
         throw new Error('Invalid template specification: missing required fields');
       }
 
+      if (!session?.user?.id) {
+        throw new Error('User not authenticated');
+      }
+
       const response = await supabase.functions.invoke('notion-template', {
         body: { 
           templateSpec: {
@@ -52,7 +56,9 @@ export function useTemplateChat() {
             description: parsedSpec.description,
             blocks: parsedSpec.blocks,
             database_properties: parsedSpec.database_properties || {},
-            sample_data: parsedSpec.sample_data || []
+            sample_data: parsedSpec.sample_data || [],
+            user_id: session.user.id,
+            category: "Custom" // Default category
           }
         }
       });
